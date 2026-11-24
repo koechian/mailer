@@ -179,9 +179,6 @@ struct ThreadRow: View {
                         Text("\(count)").font(.captionStrong).foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 6)
-                    if message.attachments.contains(where: { !$0.mimeType.hasPrefix("text/calendar") }) {
-                        IconView(.attachment, size: 13).foregroundStyle(Theme.muted)
-                    }
                     Text(When.short(message.date))
                         .font(.caption)
                         .foregroundStyle(unread ? Theme.ink : Theme.muted)
@@ -199,6 +196,19 @@ struct ThreadRow: View {
                     .lineLimit(2)
                     .lineSpacing(2)
                     .padding(.top, 5)
+                // Attachments as files, the way the reader shows them, so a
+                // row says what's attached without opening it (owner,
+                // 2026-11-25). Two fit the row; the rest are counted.
+                if !files.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(files.prefix(2), id: \.partID) { RowFile(attachment: $0) }
+                        if files.count > 2 {
+                            Text("+\(files.count - 2)").font(.captionStrong).foregroundStyle(Theme.muted)
+                                .fixedSize()
+                        }
+                    }
+                    .padding(.top, 8)
+                }
             }
         }
         .padding(.horizontal, Theme.Space.row)
@@ -210,6 +220,10 @@ struct ThreadRow: View {
         .onHover { hovering = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+    }
+
+    private var files: [Attachment] {
+        message.attachments.filter { !$0.filename.isEmpty && !$0.mimeType.hasPrefix("text/calendar") }
     }
 
     /// In Sent, the row is about who it went to.
@@ -226,6 +240,31 @@ struct ThreadRow: View {
             return "To: " + (name.isEmpty ? email : name)
         }
         return message.senderLabel
+    }
+}
+
+/// One attached file in an inbox row: the type badge and the name. Selecting
+/// the row shows it in full; the row itself isn't a place to open files.
+private struct RowFile: View {
+    let attachment: Attachment
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // 4 pt badge in an 8 pt pill with 4 pt padding: concentric.
+            FileBadge(filename: attachment.filename, size: 18, radius: 4)
+            Text(attachment.filename)
+                .font(.caption)
+                .foregroundStyle(Theme.body)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 96, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 8)
+        .frame(height: 26)
+        .background(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).fill(Theme.fillHover))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).strokeBorder(Theme.line))
     }
 }
 

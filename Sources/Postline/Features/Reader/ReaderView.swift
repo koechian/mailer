@@ -218,10 +218,7 @@ struct AttachmentChip: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(hue.tint)
-                    .frame(width: 30, height: 30)
-                    .overlay(Text(ext).font(.system(size: 9, weight: .bold)).foregroundStyle(hue.ink))
+                FileBadge(filename: attachment.filename, size: 30, radius: 6)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(attachment.filename).font(.calloutStrong).foregroundStyle(Theme.ink).lineLimit(1)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file))
@@ -240,8 +237,25 @@ struct AttachmentChip: View {
         .help("Open \(attachment.filename)")
     }
 
+}
+
+/// The coloured file-type square: "PDF" on red, "XLSX" on green… Shared by the
+/// reader's attachment chips and the files shown in inbox rows.
+struct FileBadge: View {
+    let filename: String
+    let size: CGFloat
+    let radius: CGFloat
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(hue.tint)
+            .frame(width: size, height: size)
+            .overlay(Text(ext).font(.system(size: size * 0.3, weight: .bold)).foregroundStyle(hue.ink)
+                .minimumScaleFactor(0.7).lineLimit(1).padding(.horizontal, 1))
+    }
+
     private var ext: String {
-        let e = (attachment.filename as NSString).pathExtension.uppercased()
+        let e = (filename as NSString).pathExtension.uppercased()
         return e.isEmpty ? "FILE" : String(e.prefix(4))
     }
 

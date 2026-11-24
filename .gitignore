@@ -1,0 +1,53 @@
+build/
+.build/
+.DS_Store
+
+# Build output and caches
+build/
+build.noindex/
+.build/
+DerivedData/
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+*.profraw
+node_modules/
+dist/
+.next/
+Pods/
+__pycache__/
+*.pyc
+
+# Built products and archives
+*.ipa
+*.app
+*.dSYM
+*.xcarchive
+*.dmg
+*.zip
+
+# Recordings and video
+*.mov
+*.mp4
+*.m4v
+
+# Secrets and signing
+.env*
+!.env.example
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+GoogleService-Info.plist
+
+.DS_Store
+
+# Your own Google OAuth client ID (README → Google setup)
+GoogleClientID.txt
+
+# Screenshots and recordings stay out of git; README images are hosted on the
+# GitHub release instead.
+docs/screens/
+*.png
+!Resources/**/*.png

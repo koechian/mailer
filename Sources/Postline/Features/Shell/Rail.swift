@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The left rail: the Postline mark, then the accounts (all together, or
+/// The left rail: the accounts (all together, or
 /// one at a time — Spark keeps them in the same place), recent codes, and
 /// Settings at the bottom.
 struct Rail: View {
@@ -11,9 +11,8 @@ struct Rail: View {
     var body: some View {
         VStack(spacing: 10) {
             // Room for the window's traffic lights.
+            // No logo here: the rail starts with the Inbox (owner, 2026-11-25).
             Color.clear.frame(height: 30)
-            mark
-            Spacer().frame(height: 6)
 
             // The Inbox icon is "every account's Inbox", wherever you were —
             // one click, not this and then the Inbox tab (owner, 2026-11-12).
@@ -41,15 +40,6 @@ struct Rail: View {
             .padding(.bottom, 14)
         }
         .frame(width: Theme.Space.rail)
-    }
-
-    /// The app's mark: a dark tile, as in the reference.
-    private var mark: some View {
-        RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(Theme.primary)
-            .frame(width: 36, height: 36)
-            .overlay(IconView(.mail, size: 19).foregroundStyle(Theme.onPrimary))
-            .accessibilityLabel("Postline")
     }
 
     private func railItem<Content: View>(selected: Bool, help: String, @ViewBuilder content: () -> Content,

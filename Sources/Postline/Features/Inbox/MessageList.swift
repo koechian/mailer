@@ -29,7 +29,7 @@ struct MessageList: View {
                 }
             }
         }
-        .card()
+        .card(radius: Theme.Radius.inPanel)
     }
 
     @ViewBuilder private var header: some View {

@@ -40,7 +40,7 @@ struct MainView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .card()
+                .card(radius: Theme.Radius.inPanel)
             }
             .padding(.horizontal, Theme.Space.panelPad)
             .padding(.bottom, Theme.Space.panelPad)
@@ -115,6 +115,11 @@ struct HeaderBar: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
             .strokeBorder(searchFocused ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5))
         .onReceive(NotificationCenter.default.publisher(for: .postlineFocusSearch)) { _ in searchFocused = true }
+        // With the rail's logo gone the search field was the first thing
+        // that could take focus, so the window opened typing into it and
+        // J/K/E did nothing until a click (measured 2026-11-25). Start with
+        // nothing focused; ⌘F and / still go to search.
+        .task { try? await Task.sleep(for: .milliseconds(50)); searchFocused = false; NSApp.keyWindow?.makeFirstResponder(nil) }
     }
 }
 

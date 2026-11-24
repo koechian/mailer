@@ -8,8 +8,12 @@ import AppKit
 /// a reader card with hairline rings.
 ///
 /// Corner radii are concentric everywhere one rounded box sits inside
-/// another: inner radius = outer radius − the gap between them. The panel is
-/// 24; the list and reader cards sit 12 inside it, so they are 12. Controls
+/// another: inner radius = outer radius − the gap between them. The window
+/// keeps macOS's own corner (~16 pt, the same as the Claude app's; measured
+/// 2026-11-25) and the panel sits 10 inside it, so it is 6. The list and
+/// reader cards sit 12 inside the panel, more than its radius, so they take
+/// the same 6 (`inPanel`) rather than a rounder corner that would bulge the
+/// gap. Cards that stand alone, outside the panel, stay 12. Controls
 /// (tabs, buttons, fields) are 8; the rail's 40-pt buttons are 10 and its
 /// 36-pt logo tile 9, the same proportion.
 enum Theme {
@@ -30,8 +34,10 @@ enum Theme {
     static let muted2 = Color(light: 0xA1A1AA, dark: 0x6E6E75)
 
     // MARK: Lines
-    static let line   = Color(light: 0xECECEE, dark: 0x2F2F33)
-    static let ring   = Color(light: 0x000000, dark: 0xFFFFFF).opacity(0.075)
+    // 10% softer than before (0xECECEE / 0x2F2F33, ring 0.075): each moved
+    // 10% of the way toward the panel colour (owner, 2026-11-25).
+    static let line   = Color(light: 0xEEEEF0, dark: 0x2D2D31)
+    static let ring   = Color(light: 0x000000, dark: 0xFFFFFF).opacity(0.0675)
 
     // MARK: Colour
     /// Cued's signature blue: selection, focus, the primary action in dialogs.
@@ -87,8 +93,13 @@ enum Theme {
 
     // MARK: Geometry
     enum Radius {
-        static let window: CGFloat = 32
-        static let panel: CGFloat = 24
+        /// macOS's own window corner, not drawn by Postline. A drawn 34 pt
+        /// corner was too round next to other Mac apps (owner, 2026-11-25).
+        static let window: CGFloat = 16
+        static let panel: CGFloat = 6
+        /// The list and reader cards, which sit inside the panel.
+        static let inPanel: CGFloat = 6
+        /// Cards that stand on their own (Settings, onboarding).
         static let card: CGFloat = 12
         static let control: CGFloat = 8
         static let chip: CGFloat = 10
@@ -100,7 +111,10 @@ enum Theme {
         /// The gap between the panel's edge and the cards — and so the panel
         /// radius minus the card radius.
         static let panelPad: CGFloat = 12
-        static let rail: CGFloat = 72
+        /// 78 leaves the green traffic light 10.5 pt from the panel, the same
+        /// as the red one's 9 pt from the window edge, and centres the rail's
+        /// icons under the lights (owner: they were colliding, 2026-11-25).
+        static let rail: CGFloat = 78
         static let listWidth: CGFloat = 372
         static let row: CGFloat = 16
     }

@@ -4,7 +4,7 @@ A fast, private Gmail app for the Mac. Native SwiftUI, with no server in between
 each account talks straight to Gmail, and your mail is kept in a small database on
 your Mac, so opening, switching and searching never wait on the network.
 
-![Postline's inbox](https://github.com/contactharshitdesign-design/postline/releases/download/v1.0.0/inbox.png)
+![Postline's inbox](https://github.com/oiharshit/postline/releases/download/v1.0.0/inbox.png)
 
 - **Fast.** A mailbox opens in 1–2 ms and a search takes 4–5 ms (measured on 2,000 stored
   messages). New mail shows up within about 5 s of landing in Gmail: a history check runs
@@ -31,14 +31,14 @@ your Mac, so opening, switching and searching never wait on the network.
   company logos, and initials as a fallback.
 - **Send as any address** Gmail lets you send as, with 5 seconds to Undo.
 
-![Reading an email, with suggested replies](https://github.com/contactharshitdesign-design/postline/releases/download/v1.0.0/reader.png)
+![Reading an email, with suggested replies](https://github.com/oiharshit/postline/releases/download/v1.0.0/reader.png)
 
 Needs macOS 15 or later on an Apple silicon Mac.
 
 ## Install
 
 **Download:** get `Postline.dmg` from the
-[latest release](https://github.com/contactharshitdesign-design/postline/releases/latest),
+[latest release](https://github.com/oiharshit/postline/releases/latest),
 open it and drag Postline to Applications. It's notarized by Apple.
 
 The download signs in through the Postline Google project, which Google hasn't verified.
@@ -55,7 +55,7 @@ writing model:
 ```bash
 xcodebuild -downloadComponent MetalToolchain   # once (or Xcode → Settings → Components)
 
-git clone https://github.com/contactharshitdesign-design/postline.git
+git clone https://github.com/oiharshit/postline.git
 cd postline
 ./build.sh demo       # try it with sample mail, no account needed
 ```

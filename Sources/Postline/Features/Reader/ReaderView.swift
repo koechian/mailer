@@ -218,7 +218,7 @@ struct AttachmentChip: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 10) {
-                FileBadge(filename: attachment.filename, size: 30, radius: 6)
+                FileBadge(filename: attachment.filename, size: 30, radius: 10)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(attachment.filename).font(.calloutStrong).foregroundStyle(Theme.ink).lineLimit(1)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file))
@@ -319,7 +319,7 @@ struct EmptyReader: View {
     let model: AppModel
     var body: some View {
         VStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Theme.fill)
                 .frame(width: 64, height: 64)
                 .overlay(IconView(.mailOpen, size: 30).foregroundStyle(Theme.muted2))
@@ -340,7 +340,7 @@ struct EmptyReader: View {
         HStack(spacing: 10) {
             Text(keys).font(.system(size: 11.5, weight: .medium, design: .monospaced)).foregroundStyle(Theme.body)
                 .padding(.horizontal, 6).frame(minWidth: 44, minHeight: 22)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Theme.fill))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.fill))
             Text(label).font(.callout).foregroundStyle(Theme.muted).frame(width: 130, alignment: .leading)
         }
     }

@@ -107,7 +107,7 @@ struct OnboardingView: View {
 
     private var notifications: some View {
         VStack(spacing: 22) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.Hue.green.tint)
+            RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.Hue.green.tint)
                 .frame(width: 64, height: 64)
                 .overlay(IconView(.notification, size: 30).foregroundStyle(Theme.Hue.green.ink))
             heading("Know the moment mail lands", "New mail shows a notification. Sign-in codes show the code itself with a Copy button, and clicking any notification opens the email.")
@@ -163,7 +163,7 @@ struct OnboardingView: View {
     // MARK: Parts
 
     private var mark: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
             .fill(Theme.primary)
             .frame(width: 64, height: 64)
             .overlay(IconView(.mail, size: 32).foregroundStyle(Theme.onPrimary))

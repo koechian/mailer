@@ -61,11 +61,11 @@ private struct RailButton<Content: View>: View {
                 .foregroundStyle(selected || hovering ? Theme.ink : Theme.muted)
                 .frame(width: 40, height: 40)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(selected ? Theme.panel : hovering ? Theme.fill : .clear)
                         .shadow(color: .black.opacity(selected ? 0.06 : 0), radius: 2, y: 1)
                 )
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(selected ? Theme.ring : .clear))
                 .contentShape(Rectangle())
         }

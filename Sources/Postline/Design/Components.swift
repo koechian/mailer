@@ -213,9 +213,11 @@ struct Checkbox: View {
 
     var body: some View {
         Button(action: action) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
+            // 6, not the +4 everything else got: at 9 this 18 pt box turned
+            // into a circle and read as a radio button (2026-11-25).
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(state == .off ? (hovering ? Theme.fill : Theme.card) : Theme.accent)
-                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(state == .off ? Theme.muted2 : .clear, lineWidth: 1.5))
                 .overlay {
                     switch state {

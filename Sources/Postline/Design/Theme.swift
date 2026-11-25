@@ -93,17 +93,19 @@ enum Theme {
 
     // MARK: Geometry
     enum Radius {
+        // Every radius below is 4 pt rounder than the concentric minimum
+        // (owner, 2026-11-25: "it looks more boxy").
         /// macOS's own window corner, not drawn by Postline. A drawn 34 pt
         /// corner was too round next to other Mac apps (owner, 2026-11-25).
         static let window: CGFloat = 16
-        static let panel: CGFloat = 6
+        static let panel: CGFloat = 10
         /// The list and reader cards, which sit inside the panel.
-        static let inPanel: CGFloat = 6
+        static let inPanel: CGFloat = 10
         /// Cards that stand on their own (Settings, onboarding).
-        static let card: CGFloat = 12
-        static let control: CGFloat = 8
-        static let chip: CGFloat = 10
-        static let tile: CGFloat = 9
+        static let card: CGFloat = 16
+        static let control: CGFloat = 12
+        static let chip: CGFloat = 14
+        static let tile: CGFloat = 13
     }
 
     enum Space {

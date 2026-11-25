@@ -250,8 +250,8 @@ private struct RowFile: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            // 4 pt badge in an 8 pt pill with 4 pt padding: concentric.
-            FileBadge(filename: attachment.filename, size: 18, radius: 4)
+            // 8 pt badge in the 12 pt pill with 4 pt padding: concentric.
+            FileBadge(filename: attachment.filename, size: 18, radius: 8)
             Text(attachment.filename)
                 .font(.caption)
                 .foregroundStyle(Theme.body)

@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             NSApp.appearance = Preferences.shared.appearance.nsAppearance
+            Config.rememberBuiltClientID()
             AppModel.shared.start()
             // Started by "Open at login": run in the background, no window.
             let event = NSAppleEventManager.shared().currentAppleEvent

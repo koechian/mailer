@@ -704,3 +704,12 @@ final class ThreadExportTests: XCTestCase {
         XCTAssertEqual(second.lastPathComponent, "B 2", "an existing folder is never replaced")
     }
 }
+
+final class ConfigTests: XCTestCase {
+    func testRecognisesAGoogleClientID() {
+        XCTAssertTrue(Config.isValidClientID("123456789012-abcdefghijklmnopqrstuvwxyz012345.apps.googleusercontent.com"))
+        XCTAssertFalse(Config.isValidClientID("REPLACE_ME"))
+        XCTAssertFalse(Config.isValidClientID("123 456.apps.googleusercontent.com"))
+        XCTAssertFalse(Config.isValidClientID(".apps.googleusercontent.com"))
+    }
+}

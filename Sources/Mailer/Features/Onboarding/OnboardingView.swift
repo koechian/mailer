@@ -9,6 +9,9 @@ struct OnboardingView: View {
     @State private var step: Step = .welcome
     @State private var connected: Account?
     @State private var range: AppModel.ImportRange = .week
+    @State private var clientIDDraft = ""
+    /// A client ID was pasted and saved; Config is not observed, so this redraws.
+    @State private var clientIDSaved = false
 
     enum Step { case welcome, importMail, notifications, done }
 
@@ -38,7 +41,7 @@ struct OnboardingView: View {
         VStack(spacing: 22) {
             mark
             heading("Welcome to Mailer", "Fast mail for your Gmail accounts. Your mail is kept on this Mac, and nothing passes through anyone's server.")
-            if Config.isConfigured {
+            if Config.isConfigured || clientIDSaved {
                 Button {
                     Task {
                         if let account = await model.connectAccount() {
@@ -62,19 +65,32 @@ struct OnboardingView: View {
         }
     }
 
-    /// Shown until the Google OAuth client ID is in Config.swift.
+    /// Shown until Mailer has a Google OAuth client ID: this build carries
+    /// none and none is kept on this Mac (a downloaded build, first run).
     private var setupNeeded: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 IconView(.key, size: 16).foregroundStyle(Theme.Hue.amber.ink)
                 Text("One setup step first").font(.calloutStrong).foregroundStyle(Theme.ink)
             }
-            Text("Mailer signs in through your own free Google Cloud project, so no company sits between you and Gmail. README.md has the click-by-click steps; once the client ID is in Config.swift, rebuild and this button appears.")
+            Text("Mailer signs in through your own free Google Cloud project, so no company sits between you and Gmail. The README has the click-by-click steps. Paste the client ID it gives you here.")
                 .font(.callout).foregroundStyle(Theme.body).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                TextField("…apps.googleusercontent.com", text: $clientIDDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(saveClientID)
+                Button("Save", action: saveClientID)
+                    .buttonStyle(QuietButtonStyle(height: 28, fullWidth: false))
+                    .disabled(!Config.isValidClientID(clientIDDraft.trimmingCharacters(in: .whitespacesAndNewlines)))
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Theme.Hue.amber.tint))
+    }
+
+    private func saveClientID() {
+        clientIDSaved = Config.saveClientID(clientIDDraft)
     }
 
     private var importMail: some View {

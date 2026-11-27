@@ -56,6 +56,8 @@ final class AppModel {
     var codes: [FoundCode] = []
     var error: String?
     var addingAccount = false
+    /// A new version is downloaded and installs when Mailer quits.
+    var updateReady: Updates.Ready?
     /// Accounts with no Google sign-in (revoked, expired, or issued to
     /// another Google project). Settings offers to sign them in again.
     private(set) var signedOut: Set<String> = []

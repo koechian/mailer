@@ -14,7 +14,10 @@ let package = Package(
         // downloaded (~/.cache/huggingface) is reused, never fetched again.
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMinor(from: "3.32.3"), traits: []),
         .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.3.0"),
-        .package(url: "https://github.com/huggingface/swift-huggingface.git", from: "0.9.0")
+        .package(url: "https://github.com/huggingface/swift-huggingface.git", from: "0.9.0"),
+        // Updates: checks the release feed on GitHub, verifies and installs
+        // new builds (see Core/Updates.swift).
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", .upToNextMinor(from: "2.10.1"))
     ],
     targets: [
         // OpenOTP's code detector (MIT, © 2026 jeninh), vendored unchanged so
@@ -34,7 +37,8 @@ let package = Package(
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
                 .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
-                .product(name: "HuggingFace", package: "swift-huggingface")
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+                .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/Mailer",
             swiftSettings: [.swiftLanguageMode(.v5)],
@@ -46,6 +50,8 @@ let package = Package(
                 .linkedFramework("UserNotifications"),
                 .linkedFramework("ServiceManagement"),
                 .linkedFramework("Network"),
+                // Sparkle.framework is copied into Contents/Frameworks by build.sh.
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
                 // Weak: Apple's model exists only from macOS 26.
                 .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"]),
                 // Minimum 15, SDK 26, so macOS 26 draws it with today's look.

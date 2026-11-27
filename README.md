@@ -48,6 +48,10 @@ Needs macOS 15 or later on an Apple silicon Mac.
 - **Send as any address** Gmail lets you send as, with 5 seconds to Undo.
 - **Starts empty.** Only mail that arrives after you connect is downloaded. Import older mail
   (7 days, 30 days, 3 months, 1 year or everything) at sign-in or later in Settings.
+- **Updates itself.** Every change merged to `main` is built, signed and published on
+  GitHub; Mailer checks every hour, downloads a new version in the background and installs
+  it when you quit. The header says when one is ready, with **Restart** to install it now.
+  **Mailer → Check for Updates…** checks straight away.
 - **In the Dock like any other app.** Closing the window keeps Mailer running, so mail and
   codes still arrive; a menu bar icon appears for 5 minutes when new Primary mail or a code
   arrives.
@@ -76,7 +80,13 @@ Where Mailer is going, roughly in order:
 
 ## Install
 
-There is no prebuilt download: build it yourself (below) with your own free Google project.
+Download `Mailer-<version>.zip` from the
+[latest release](https://github.com/koechian/mailer/releases/latest), unzip it and move
+Mailer to Applications. It isn't notarised, so the first time, right-click it and choose
+**Open**. Mailer asks for the client ID of your own free Google project
+([Google setup](#google-setup-once-free-about-10-minutes)); from then on it updates itself.
+
+Or build it yourself (below).
 
 ## Build it yourself
 
@@ -115,6 +125,23 @@ rebuild. If your certificate shows as not valid, install Apple's
 
 Every push to `main` and every pull request is built and tested on GitHub
 (`.github/workflows/build-and-test.yml`).
+
+### Updates
+
+The version is `1.2.<commits on main>`, set by `build.sh`, so a local build and the published
+build of the same commit are the same version. Each merge to `main` is published as a GitHub
+release: `tools/package_release.sh` zips the app, signs the zip with the update key and writes
+`appcast.xml`, the feed Mailer reads through [Sparkle](https://sparkle-project.org). Releases
+need three repository secrets:
+
+| Secret | What it is |
+|---|---|
+| `SIGNING_CERTIFICATE_P12` | Your Apple Development certificate and key, exported as .p12, base64. The same one your own builds use, so the Keychain keeps trusting updated copies. |
+| `SIGNING_CERTIFICATE_PASSWORD` | The .p12's password. |
+| `SPARKLE_PRIVATE_KEY` | The update key, from Sparkle's `generate_keys --account mailer -x <file>`. Its public half is `SUPublicEDKey` in `Resources/Info.plist`. Keep a backup: without it no update can be signed for the copies already installed. |
+
+Without them, `main` is still built and tested but not released. Published builds carry no
+Google client ID; Mailer keeps yours on your Mac.
 
 ### Google setup (once, free, about 10 minutes)
 

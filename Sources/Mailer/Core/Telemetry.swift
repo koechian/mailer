@@ -5,11 +5,10 @@ import Sentry
 /// server that speaks Sentry's protocol) through the Sentry SDK, and only
 /// while diagnostics are turned on in Settings. They are off by default.
 ///
-/// The address (DSN) is not in the repository: `build.sh` writes it into
-/// Info.plist from `MAILER_GLITCHTIP_DSN` or `GlitchTipDSN.txt`, and it is
-/// then kept on this Mac, like the Google client ID, because the published
-/// updates that replace the build carry none. A Mac that has never run a
-/// build with one has no Settings switch and sends nothing.
+/// The address (DSN) is not in the repository: `build.sh` bakes it into
+/// Info.plist from `MAILER_GLITCHTIP_DSN` or `GlitchTipDSN.txt`, and CI does
+/// the same for published builds from its `MAILER_GLITCHTIP_DSN` secret. A
+/// build without one has no Settings switch and sends nothing.
 ///
 /// What goes out: the error or crash with its stack, the log lines leading
 /// up to it, `Log` lines, `Performance` timings as transactions and spans,
@@ -19,21 +18,10 @@ import Sentry
 /// the SDK's default user data (IP address, user name) is off.
 enum Telemetry {
 
-    /// The GlitchTip project's DSN: this build's, else the one kept on this
-    /// Mac; nil when there is neither.
-    static var dsn: String? { builtDSN ?? UserDefaults.standard.string(forKey: dsnKey) }
-
-    private static let dsnKey = "glitchTipDSN"
-
-    private static let builtDSN = (Bundle.main.object(forInfoDictionaryKey: "MailerGlitchTipDSN") as? String)
+    /// The GlitchTip project's DSN baked into this build, or nil.
+    static let dsn: String? = (Bundle.main.object(forInfoDictionaryKey: "MailerGlitchTipDSN") as? String)
         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         .flatMap { $0.isEmpty ? nil : $0 }
-
-    /// Keeps the DSN this build carries on this Mac.
-    static func rememberBuiltDSN() {
-        guard let builtDSN else { return }
-        UserDefaults.standard.set(builtDSN, forKey: dsnKey)
-    }
 
     static var isAvailable: Bool { dsn != nil }
 

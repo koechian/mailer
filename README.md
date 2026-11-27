@@ -142,7 +142,10 @@ need three repository secrets:
 | `SPARKLE_PRIVATE_KEY` | The update key, from Sparkle's `generate_keys --account mailer -x <file>`. Its public half is `SUPublicEDKey` in `Resources/Info.plist`. Keep a backup: without it no update can be signed for the copies already installed. |
 
 Without them, `main` is still built and tested but not released. Published builds carry no
-Google client ID; Mailer keeps yours on your Mac.
+Google client ID; Mailer keeps yours on your Mac. Two more secrets are optional:
+`MAILER_GLITCHTIP_DSN` bakes your GlitchTip DSN into published builds, and
+`GLITCHTIP_AUTH_TOKEN` uploads their debug symbols (see
+[Error and crash reporting](#error-and-crash-reporting-optional)).
 
 ### Google setup (once, free, about 10 minutes)
 
@@ -195,16 +198,16 @@ says which model is in use, and has a switch for each kind of help.
 
 Mailer can send errors, crashes, hangs, timings and log lines to a GlitchTip (or Sentry)
 project of your own, through the Sentry SDK. Put the project's DSN in `GlitchTipDSN.txt` next
-to `build.sh` (or set `MAILER_GLITCHTIP_DSN`); it stays out of the repository. The app keeps
-it on your Mac, so the published updates, which carry none, go on reporting. Reporting is still
-off until you turn on Settings → Diagnostics. A Mac that has never run a build with a DSN has no
+to `build.sh` (or set `MAILER_GLITCHTIP_DSN`); it stays out of the repository and is baked
+into the build. CI bakes it into published builds from the `MAILER_GLITCHTIP_DSN` secret.
+Reporting is still off until you turn on Settings → Diagnostics. A build without a DSN has no
 switch and sends nothing.
 
 So that crashes show function names, `build.sh` writes `build/Mailer.app.dSYM` and uploads it
 with `sentry-cli` when `GLITCHTIP_AUTH_TOKEN` is set (a GlitchTip auth token with
 `project:write`). `GLITCHTIP_ORG` and `GLITCHTIP_PROJECT` name the project (default
-`personal`/`mailer`). For the published updates, CI does the same when the repository has the
-`GLITCHTIP_AUTH_TOKEN` and `GLITCHTIP_URL` secrets.
+`personal`/`mailer`). For published builds, CI does the same when the repository has the
+`GLITCHTIP_AUTH_TOKEN` secret.
 
 ## Change it
 

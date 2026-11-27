@@ -1,6 +1,7 @@
 import XCTest
 import OTPCore
 import SQLite3
+import WebKit
 @testable import Mailer
 
 final class OTPTests: XCTestCase {
@@ -449,6 +450,52 @@ final class RemoteContentTests: XCTestCase {
         XCTAssertTrue(HTMLView.opensExternally(URL(string: "mailto:someone@example.com")!))
         XCTAssertFalse(HTMLView.opensExternally(URL(string: "file:///etc/passwd")!))
         XCTAssertFalse(HTMLView.opensExternally(URL(string: "javascript:alert(1)")!))
+    }
+}
+
+/// The reader's page style, laid out by WebKit.
+@MainActor
+final class HTMLLayoutTests: XCTestCase {
+    private final class LoadWaiter: NSObject, WKNavigationDelegate {
+        var finished: CheckedContinuation<Void, Never>?
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            finished?.resume()
+            finished = nil
+        }
+    }
+
+    private func layOut(_ html: String, script: String) async throws -> Double {
+        let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 800))
+        let waiter = LoadWaiter()
+        view.navigationDelegate = waiter
+        await withCheckedContinuation { continuation in
+            waiter.finished = continuation
+            view.loadHTMLString(HTMLView.wrap(html), baseURL: nil)
+        }
+        let value = try await view.evaluateJavaScript(script)
+        return try XCTUnwrap(value as? Double, "\(String(describing: value))")
+    }
+
+    /// GitHub's Actions emails give the "Status" column 24 px and the next
+    /// one 100 %; the header was drawn one letter per line.
+    func testNarrowTableColumnKeepsWholeWords() async throws {
+        let html = """
+        <table style="width: 100%"><tr>
+          <th style="width: 24px">Status</th><th style="width: 100%">Job</th>
+        </tr></table>
+        """
+        let lines = try await layOut(html, script: """
+            const range = document.createRange();
+            range.selectNodeContents(document.querySelector('th'));
+            range.getClientRects().length
+            """)
+        XCTAssertEqual(lines, 1, "\"Status\" is drawn on one line")
+    }
+
+    func testLongWordStillWrapsWithinTheReader() async throws {
+        let html = "<p>https://example.com/\(String(repeating: "a", count: 300))</p>"
+        let width = try await layOut(html, script: "document.documentElement.scrollWidth")
+        XCTAssertLessThanOrEqual(width, 600)
     }
 }
 

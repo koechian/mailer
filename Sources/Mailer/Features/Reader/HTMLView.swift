@@ -91,6 +91,11 @@ struct HTMLView: NSViewRepresentable {
     /// for mail that names none and nothing wider than the reader. An image
     /// still loading shows a soft shimmer in its space (`mailer-loading`,
     /// set by `pageScript`); images that say their size keep that space.
+    ///
+    /// A long word or link breaks only where it would overflow
+    /// (`overflow-wrap: break-word`). `anywhere` must not be used: it lets a
+    /// table column shrink to one letter, so a header in a narrow column
+    /// (GitHub's 24 px "Status") was drawn one letter per line.
     static func wrap(_ html: String, allowsRemoteContent: Bool = false) -> String {
         """
         <!doctype html><html><head><meta charset="utf-8">
@@ -101,7 +106,7 @@ struct HTMLView: NSViewRepresentable {
         <style>
           html, body { margin: 0; padding: 0; background: #fff; }
           body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: #3f3f46;
-                 word-wrap: break-word; overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; }
+                 overflow-wrap: break-word; -webkit-text-size-adjust: 100%; }
           img { max-width: 100% !important; height: auto; }
           img.mailer-loading { background: linear-gradient(90deg, #f4f4f5 25%, #e9e9ec 37%, #f4f4f5 63%);
                                  background-size: 400% 100%; border-radius: 4px;

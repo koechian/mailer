@@ -8,6 +8,9 @@ struct SettingsView: View {
     @State private var importFor: Account?
     @State private var removing: Account?
     @State private var notificationsAllowed: Bool?
+    /// Sparkle keeps these; read when Settings opens.
+    @State private var updatesChecked = false
+    @State private var updatesInstalled = false
 
     var body: some View {
         ScrollView {
@@ -84,6 +87,26 @@ struct SettingsView: View {
                 }
                 .onChange(of: prefs.companyLogos) { _, on in
                     if on { Avatars.shared.forgetMisses() }
+                }
+
+                section("Updates") {
+                    Toggle("Check for updates every hour", isOn: Binding(
+                        get: { updatesChecked }, set: { updatesChecked = $0; Updates.shared.checksAutomatically = $0 }))
+                        .font(.callout)
+                    Toggle("Install updates when I quit Mailer", isOn: Binding(
+                        get: { updatesInstalled }, set: { updatesInstalled = $0; Updates.shared.installsAutomatically = $0 }))
+                        .font(.callout)
+                    HStack {
+                        Text("Version \(Updates.currentVersion)").font(.caption).foregroundStyle(Theme.muted)
+                        Spacer()
+                        Button("Check now") { Updates.shared.checkNow() }
+                            .buttonStyle(QuietButtonStyle(height: 30, fullWidth: false))
+                            .disabled(!Updates.shared.isRunning)
+                    }
+                }
+                .onAppear {
+                    updatesChecked = Updates.shared.checksAutomatically
+                    updatesInstalled = Updates.shared.installsAutomatically
                 }
 
                 section("General") {

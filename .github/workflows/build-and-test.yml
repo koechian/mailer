@@ -1,7 +1,13 @@
 # Builds the app bundle the way build.sh does and runs the tests, for every
-# pull request and every change to main. Signed ad hoc and without a Google
-# client ID: the bundle proves the build works, it is not for installing
-# (install with ./build.sh install on your own Mac).
+# pull request and every change to main.
+#
+# A change to main is also published as an update: built with the owner's
+# Apple Development certificate (the same one their Mac builds use, so the
+# Keychain keeps trusting the app), packaged and signed with the update key
+# (tools/package_release.sh), and released on GitHub, where every installed
+# Mailer finds it within the hour (Core/Updates.swift). Pull requests are
+# signed ad hoc and never released. Published builds carry no Google client
+# ID: Mailer keeps the owner's on their Mac.
 name: Build and test
 
 on:
@@ -14,7 +20,9 @@ permissions:
 
 concurrency:
   group: build-and-test-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a pull request replaces its run; on main every run
+  # finishes, so no release is cut short.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
@@ -22,8 +30,16 @@ jobs:
     # the app is developed with.
     runs-on: macos-26
     timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      RELEASING: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Every commit and tag: the version counts commits on main, and the
+          # release notes start at the previous release.
+          fetch-depth: 0
 
       - name: Show the toolchain
         run: |
@@ -41,8 +57,54 @@ jobs:
           key: swiftpm-${{ github.repository }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
           restore-keys: swiftpm-${{ github.repository }}-${{ runner.os }}-${{ runner.arch }}-
 
+      - name: Load the signing certificate
+        id: signing
+        if: env.RELEASING == 'true'
+        env:
+          CERTIFICATE: ${{ secrets.SIGNING_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$CERTIFICATE" ]; then
+            echo "::warning::No signing certificate secret: this build is not released."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" \
+            -t agg -f pkcs12 -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          # Apple's intermediate for Apple Development certificates.
+          curl -fsSL -o "$RUNNER_TEMP/AppleWWDRCAG3.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "$RUNNER_TEMP/AppleWWDRCAG3.cer" -k "$KEYCHAIN" || true
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
       - name: Build the app bundle
         run: ./build.sh
 
       - name: Run the tests
         run: swift test
+
+      - name: Publish the update
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          umask 077
+          export SPARKLE_KEY_FILE="$RUNNER_TEMP/sparkle.key"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$SPARKLE_KEY_FILE"
+          VERSION="$(tools/package_release.sh build/Mailer.app build/release | tail -1)"
+          rm -f "$SPARKLE_KEY_FILE"
+          gh release create "v$VERSION" "build/release/Mailer-$VERSION.zip" build/release/appcast.xml \
+            --title "Mailer $VERSION" --notes-file build/release/notes.md --target "$GITHUB_SHA" --latest
+
+      - name: Remove the signing keychain
+        if: always() && steps.signing.outputs.ready == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db"

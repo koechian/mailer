@@ -38,12 +38,30 @@ cp "$BIN" "$APP/Contents/MacOS/Mailer"
 cp -R "$ROOT/Resources/Icons" "$APP/Contents/Resources/Icons"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
+# The version: Info.plist's base (1.2) and the number of commits on this
+# branch, so the same commit always builds the same version, here or on
+# GitHub, and each merge to main is newer than the last. Updates compare the
+# build number (Core/Updates.swift).
+COMMITS="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)"
+BASE_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$ROOT/Resources/Info.plist")"
+VERSION="$BASE_VERSION.$COMMITS"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" \
+    -c "Set :CFBundleVersion $COMMITS" "$APP/Contents/Info.plist"
+say "Version $VERSION"
+
 # MLX's GPU kernels for the writing model (Qwen). MLX finds them at
 # Contents/Resources/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib;
 # a data file next to the executable would break the code signature (Cued
 # learned this). Prefer the bundle this build compiled; else Cued's copy of
 # the same MLX version.
 BIN_DIR="$(dirname "$BIN")"
+
+# Sparkle, for updates. Its XPC services are only for sandboxed apps;
+# Mailer isn't one, so they are left out.
+mkdir -p "$APP/Contents/Frameworks"
+ditto "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" \
+       "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
 # Resource bundles SwiftPM built for the libraries (tokenizer data, MLX
 # kernels…) go where Bundle.module looks inside an app: Contents/Resources.
 for b in "$BIN_DIR"/*.bundle; do
@@ -130,6 +148,12 @@ else
     IDENTITY="-"
     say "No signing certificate found — signing ad hoc (fine for your own Mac)"
 fi
+# Inside out: Sparkle's helpers, then Sparkle, then the app. One identity
+# for all, so the updater may replace the app and macOS lets it load.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+for part in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app" "$SPARKLE"; do
+    codesign --force --options runtime $TIMESTAMP --sign "$IDENTITY" "$part"
+done
 codesign --force --options runtime $TIMESTAMP --entitlements "$ROOT/Resources/Mailer.entitlements" \
     --identifier "$BUNDLE_ID" --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"

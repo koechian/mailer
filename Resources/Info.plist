@@ -8,12 +8,20 @@
     <key>CFBundleExecutable</key><string>Mailer</string>
     <key>CFBundleIconFile</key><string>Mailer</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.1</string>
+    <key>CFBundleShortVersionString</key><string>1.2</string>
     <key>CFBundleVersion</key><string>2</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
+    <!-- Updates (Core/Updates.swift). build.sh adds .<commits on main> to the
+         version and sets the build number to that count. -->
+    <key>SUFeedURL</key><string>https://github.com/koechian/mailer/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>d8kwqC+gM+EhBVw+h+fOTlW0Ge7Su//kPLfrU7/We0Q=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAutomaticallyUpdate</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>3600</integer>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
     <key>NSHumanReadableCopyright</key><string>Personal app. Icons: Hugeicons (MIT). Code detection: OpenOTP (MIT).</string>
 </dict>
 </plist>

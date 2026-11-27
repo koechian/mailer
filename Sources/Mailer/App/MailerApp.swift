@@ -29,6 +29,10 @@ struct MailerApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1360, height: 860)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Updates.shared.checkNow() }
+                    .disabled(!Updates.shared.isRunning)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Email") { model.compose() }.keyboardShortcut("n", modifiers: .command)
             }
@@ -85,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.appearance = Preferences.shared.appearance.nsAppearance
             Config.rememberBuiltClientID()
             AppModel.shared.start()
+            Updates.shared.start()
             // Started by "Open at login": run in the background, no window.
             let event = NSAppleEventManager.shared().currentAppleEvent
             if event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem {

@@ -55,6 +55,25 @@ struct MainView: View {
 
 // MARK: - Header
 
+/// "Mailer 1.2.140 is ready", until Mailer quits and installs it, or
+/// Restart does now.
+struct UpdateReadyBadge: View {
+    let update: Updates.Ready
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(Theme.accent).frame(width: 6, height: 6)
+            Text("Mailer \(update.version) is ready").font(.caption).foregroundStyle(Theme.body)
+            Button("Restart") { update.installNow() }
+                .buttonStyle(.plain).font(.calloutStrong).foregroundStyle(Theme.accent)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(Capsule().fill(Theme.fill))
+        .help("The update installs by itself when you quit Mailer. Restart installs it now.")
+    }
+}
+
 /// "Inbox · 1,204 emails", search, and how fresh the mail is.
 struct HeaderBar: View {
     @Bindable var model: AppModel
@@ -69,6 +88,7 @@ struct HeaderBar: View {
                 .contentTransition(.numericText())
             Spacer(minLength: 16)
             importStatus
+            if let update = model.updateReady { UpdateReadyBadge(update: update) }
             searchField
         }
         .padding(.leading, Theme.Space.panelPad + 14)

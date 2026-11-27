@@ -101,14 +101,14 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     func sendTest() {
         let content = UNMutableNotificationContent()
         content.title = "482913"
-        content.subtitle = "Code from Postline (test)"
-        content.body = "Press Copy code, or click to open Postline."
+        content.subtitle = "Code from Mailer (test)"
+        content.body = "Press Copy code, or click to open Mailer."
         content.categoryIdentifier = Self.codeCategory
         content.userInfo = ["account": "", "id": "", "code": "482913"]
         content.sound = .default
         center.add(UNNotificationRequest(identifier: "test-\(UUID())", content: content, trigger: nil))
         // The same path a real code takes, so the menu bar code icon shows too.
-        foundCode?(FoundCode(code: "482913", sender: "Postline (test)", messageID: "test", account: "", date: Date()))
+        foundCode?(FoundCode(code: "482913", sender: "Mailer (test)", messageID: "test", account: "", date: Date()))
     }
 
     private func postMail(_ m: Message) {

@@ -1,21 +1,23 @@
 #!/bin/bash
 #
-# Builds Postline.app with nothing but Xcode's command-line tools — the same
+# Builds Mailer.app with nothing but Xcode's command-line tools — the same
 # approach as Cued: SwiftPM compiles, this script wraps the binary in a real
 # .app (so macOS grants it notifications and a stable Keychain identity) and
 # signs it with your Apple Development certificate (or ad hoc, if you have none).
 #
-#   ./build.sh          release build into build/Postline.app
+#   ./build.sh          release build into build/Mailer.app
 #   ./build.sh run      build, then (re)launch it
 #   ./build.sh demo     build, then launch with sample mail (POSTLINE_DEMO=1)
 #   ./build.sh install  build, then copy to /Applications
-#   ./build.sh release  notarized build/Postline.dmg for sharing (needs a
+#   ./build.sh release  notarized build/Mailer.dmg for sharing (needs a
 #                       Developer ID certificate and a notarytool profile)
 #
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
-APP="$ROOT/build/Postline.app"
+# The app is called Mailer; the Swift package, its sources and the data
+# folders keep the name Postline it was forked from (2026-11-27).
+APP="$ROOT/build/Mailer.app"
 BUNDLE_ID="com.oiharshit.postline"
 
 ACTION="${1:-}"
@@ -30,7 +32,7 @@ BIN="$(swift build -c release --arch arm64 --show-bin-path)/Postline"
 say "Assembling bundle…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Postline"
+cp "$BIN" "$APP/Contents/MacOS/Mailer"
 cp -R "$ROOT/Resources/Icons" "$APP/Contents/Resources/Icons"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
@@ -133,28 +135,28 @@ say "Built $APP"
 
 case "$ACTION" in
     run)
-        pkill -x Postline 2>/dev/null || true; sleep 0.5
+        pkill -x Mailer 2>/dev/null || true; pkill -x Postline 2>/dev/null || true; sleep 0.5
         open "$APP" ;;
     demo)
-        pkill -x Postline 2>/dev/null || true; sleep 0.5
-        POSTLINE_DEMO=1 "$APP/Contents/MacOS/Postline" >/dev/null 2>&1 & ;;
+        pkill -x Mailer 2>/dev/null || true; pkill -x Postline 2>/dev/null || true; sleep 0.5
+        POSTLINE_DEMO=1 "$APP/Contents/MacOS/Mailer" >/dev/null 2>&1 & ;;
     install)
-        pkill -x Postline 2>/dev/null || true; sleep 0.5
-        rm -rf /Applications/Postline.app
-        ditto "$APP" /Applications/Postline.app
-        open /Applications/Postline.app
+        pkill -x Mailer 2>/dev/null || true; pkill -x Postline 2>/dev/null || true; sleep 0.5
+        rm -rf /Applications/Postline.app /Applications/Mailer.app
+        ditto "$APP" /Applications/Mailer.app
+        open /Applications/Mailer.app
         say "Installed to /Applications" ;;
     release)
         # Store notarization credentials once with
         #   xcrun notarytool store-credentials postline --apple-id <you> \
         #         --team-id <TEAMID> --password <app-specific-password>
         # (or point NOTARY_PROFILE at an existing profile).
-        DMG="$ROOT/build/Postline.dmg"
+        DMG="$ROOT/build/Mailer.dmg"
         STAGE="$ROOT/build/dmg"
         rm -rf "$STAGE" "$DMG"; mkdir -p "$STAGE"
-        ditto "$APP" "$STAGE/Postline.app"
+        ditto "$APP" "$STAGE/Mailer.app"
         ln -s /Applications "$STAGE/Applications"
-        hdiutil create -volname Postline -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+        hdiutil create -volname Mailer -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
         rm -rf "$STAGE"
         codesign --force --timestamp --sign "$IDENTITY" "$DMG"
         say "Notarizing (a few minutes)…"

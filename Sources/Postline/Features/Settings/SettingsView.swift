@@ -41,7 +41,7 @@ struct SettingsView: View {
                     HStack(spacing: 10) {
                         Circle().fill(notificationsAllowed == true ? Theme.green : Theme.red).frame(width: 7, height: 7)
                         Text(notificationsAllowed == true ? "Notifications are allowed" :
-                             notificationsAllowed == false ? "Notifications are off for Postline" : "Checking notifications…")
+                             notificationsAllowed == false ? "Notifications are off for Mailer" : "Checking notifications…")
                             .font(.callout).foregroundStyle(Theme.body)
                         Spacer()
                         if notificationsAllowed == false {
@@ -92,7 +92,7 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 280)
-                    Toggle("Open Postline at login, so mail and codes always arrive", isOn: $prefs.openAtLogin)
+                    Toggle("Open Mailer at login, so mail and codes always arrive", isOn: $prefs.openAtLogin)
                         .font(.callout)
                 }
             }
@@ -107,7 +107,7 @@ struct SettingsView: View {
                 if let removing { Task { await model.remove(removing) } }
             }
         } message: {
-            Text("Its mail is deleted from this Mac and Postline is signed out of it. Nothing changes in Gmail.")
+            Text("Its mail is deleted from this Mac and Mailer is signed out of it. Nothing changes in Gmail.")
         }
     }
 

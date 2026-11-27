@@ -1,10 +1,12 @@
-# Postline
+# Mailer
+
+A personal fork of [Postline](https://github.com/oiharshit/postline) by Harshit Maurya.
 
 A fast, private Gmail app for the Mac. Native SwiftUI, with no server in between:
 each account talks straight to Gmail, and your mail is kept in a small database on
 your Mac, so opening, switching and searching never wait on the network.
 
-![Postline's inbox](https://github.com/oiharshit/postline/releases/latest/download/inbox.png)
+![Mailer's inbox](https://github.com/oiharshit/postline/releases/latest/download/inbox.png)
 
 - **Fast.** A mailbox opens in 1–2 ms and a search takes 4–5 ms (measured on 2,000 stored
   messages). New mail shows up within about 5 s of landing in Gmail: a history check runs
@@ -16,7 +18,7 @@ your Mac, so opening, switching and searching never wait on the network.
   **Copy code** button. Click any notification to open that email.
 - **Out of the way.** In the Dock like any other app, and normally no menu bar icon. A menu
   bar icon appears for 5 minutes when new Primary mail arrives (an envelope) or a code arrives
-  (a key, gone once you copy it). Closing the window keeps Postline running; click its Dock
+  (a key, gone once you copy it). Closing the window keeps Mailer running; click its Dock
   icon to open it again.
 - **Writing help, on your Mac only.** Three faint suggested replies under each email from a
   person, ghost text while you write (**Tab** or **→** takes it), and grammar fixes on
@@ -37,15 +39,9 @@ Needs macOS 15 or later on an Apple silicon Mac.
 
 ## Install
 
-**Download:** get `Postline.dmg` from the
-[latest release](https://github.com/oiharshit/postline/releases/latest),
-open it and drag Postline to Applications. It's notarized by Apple.
-
-The download signs in through the Postline Google project, which Google hasn't verified.
-That means Google shows "Google hasn't verified this app" at sign-in (click **Advanced →
-Go to Postline**), and the project has room for 100 people in total. To skip both, build
-it yourself with your own free Google project (below). Your mail still never passes through
-anyone's server either way: Postline talks only to Google.
+Mailer has no prebuilt download: build it yourself (below), with your own free Google
+project. Postline, the app it is forked from, has a notarized download on its
+[releases page](https://github.com/oiharshit/postline/releases/latest).
 
 ## Build it yourself
 
@@ -55,7 +51,7 @@ writing model:
 ```bash
 xcodebuild -downloadComponent MetalToolchain   # once (or Xcode → Settings → Components)
 
-git clone https://github.com/oiharshit/postline.git
+git clone https://github.com/koechian/postline.git
 cd postline
 ./build.sh demo       # try it with sample mail, no account needed
 ```
@@ -69,11 +65,11 @@ echo "YOUR-CLIENT-ID.apps.googleusercontent.com" > GoogleClientID.txt
 
 | Command | What it does |
 |---|---|
-| `./build.sh` | builds `build/Postline.app` |
+| `./build.sh` | builds `build/Mailer.app` |
 | `./build.sh run` | builds and launches it |
 | `./build.sh demo` | launches with sample mail in a separate database |
 | `./build.sh install` | copies it to /Applications and opens it |
-| `./build.sh release` | makes a notarized `build/Postline.dmg` (Developer ID needed) |
+| `./build.sh release` | makes a notarized `build/Mailer.dmg` (Developer ID needed) |
 | `swift test` | runs the tests (code detection, Gmail parsing, database, outgoing mail, writing help, menu bar timing) |
 
 The app is signed with your Apple Development certificate if you have one (add a free Apple
@@ -82,16 +78,16 @@ again for Keychain access after each rebuild.
 
 ### Google setup (once, free, about 10 minutes)
 
-Postline signs in through **your own** Google Cloud project, so nobody else ever holds access
+Mailer signs in through **your own** Google Cloud project, so nobody else ever holds access
 to your mail. The client ID you copy at the end isn't a password (Google shows it in every
 sign-in link), but it stays out of the repository in `GoogleClientID.txt`.
 
 1. Open [console.cloud.google.com](https://console.cloud.google.com). Click the project picker
-   at the top, then **New project**. Name it `Postline`, click **Create**, then select it.
+   at the top, then **New project**. Name it `Mailer`, click **Create**, then select it.
 2. **APIs & Services → Library.** Search **Gmail API**, open it and click **Enable**. Go back,
    search **People API** and click **Enable**.
 3. **Google Auth Platform → Branding** (older consoles call it "OAuth consent screen"):
-   - App name `Postline`; support email and developer contact: your Gmail.
+   - App name `Mailer`; support email and developer contact: your Gmail.
    - **Audience → External.** Then click **Publish app** so the status reads **In
      production**. In "Testing", Google signs you out every 7 days.
    - **Data access → Add or remove scopes.** Paste these, click **Update**, then **Save**:
@@ -100,7 +96,7 @@ sign-in link), but it stays out of the repository in `GoogleClientID.txt`.
      - `https://www.googleapis.com/auth/contacts.other.readonly`
      - `.../auth/userinfo.email` and `.../auth/userinfo.profile`
    - You don't need Google's verification for your own use (up to 100 users). At sign-in
-     Google shows "Google hasn't verified this app": click **Advanced → Go to Postline**.
+     Google shows "Google hasn't verified this app": click **Advanced → Go to Mailer**.
      The warning is about your own project.
 4. **Google Auth Platform → Clients → Create client.**
    - Application type: **iOS** (the right type for a Mac app using this sign-in).
@@ -191,7 +187,7 @@ unread; **/** or ⌘F searches; ⌘↩ sends; ⌘Z undoes. Single-key shortcuts 
 
 ## Privacy
 
-Postline has no server. Your mail, contacts and sign-in tokens stay on your Mac (database in
+Mailer has no server. Your mail, contacts and sign-in tokens stay on your Mac (database in
 `~/Library/Application Support/Postline`, tokens in the Keychain), and the app talks only to
 Google's own Gmail, People and sign-in endpoints. Writing help runs on your Mac.
 
@@ -203,7 +199,8 @@ which would see the domain of each company that writes to you.
 
 ## Credits
 
-- Made by [Harshit Maurya](https://oiharshit.com).
+- Forked from [Postline](https://github.com/oiharshit/postline), made by
+  [Harshit Maurya](https://oiharshit.com).
 - Icons: [Hugeicons](https://hugeicons.com) free set, MIT (`Resources/Icons/LICENSE-Hugeicons.md`).
 - Code detector and the IMAP client it builds on: [OpenOTP](https://github.com/jeninh/openotp), MIT
   (`Sources/OTPCore/LICENSE-OpenOTP.txt`).

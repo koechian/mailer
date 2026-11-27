@@ -37,7 +37,7 @@ struct OnboardingView: View {
     private var welcome: some View {
         VStack(spacing: 22) {
             mark
-            heading("Welcome to Postline", "Fast mail for your Gmail accounts. Your mail is kept on this Mac, and nothing passes through anyone's server.")
+            heading("Welcome to Mailer", "Fast mail for your Gmail accounts. Your mail is kept on this Mac, and nothing passes through anyone's server.")
             if Config.isConfigured {
                 Button {
                     Task {
@@ -54,7 +54,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(QuietButtonStyle(height: 40))
                 .disabled(model.addingAccount)
-                Text("Postline asks Google for permission to read, organise and send your mail, and to see your contacts' photos.")
+                Text("Mailer asks Google for permission to read, organise and send your mail, and to see your contacts' photos.")
                     .font(.caption).foregroundStyle(Theme.muted2).multilineTextAlignment(.center)
             } else {
                 setupNeeded
@@ -69,7 +69,7 @@ struct OnboardingView: View {
                 IconView(.key, size: 16).foregroundStyle(Theme.Hue.amber.ink)
                 Text("One setup step first").font(.calloutStrong).foregroundStyle(Theme.ink)
             }
-            Text("Postline signs in through your own free Google Cloud project, so no company sits between you and Gmail. README.md has the click-by-click steps; once the client ID is in Config.swift, rebuild and this button appears.")
+            Text("Mailer signs in through your own free Google Cloud project, so no company sits between you and Gmail. README.md has the click-by-click steps; once the client ID is in Config.swift, rebuild and this button appears.")
                 .font(.callout).foregroundStyle(Theme.body).fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
@@ -82,7 +82,7 @@ struct OnboardingView: View {
             if let connected {
                 AvatarView(email: connected.email, name: connected.displayName, account: connected.email, picture: connected.pictureURL, size: 56)
             }
-            heading("Import older emails?", "Postline starts with an empty inbox and shows mail from now on. You can bring in older mail now, or later from Settings.")
+            heading("Import older emails?", "Mailer starts with an empty inbox and shows mail from now on. You can bring in older mail now, or later from Settings.")
             VStack(spacing: 6) {
                 ForEach(AppModel.ImportRange.allCases) { option in
                     ImportOption(title: option.title, detail: detail(option), selected: range == option) { range = option }

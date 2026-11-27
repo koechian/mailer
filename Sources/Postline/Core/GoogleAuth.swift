@@ -43,12 +43,12 @@ final class GoogleAuth {
             "redirect_uri": Config.redirectURI
         ])
         guard let refresh = token.refreshToken else {
-            throw PostlineError("Google did not return a refresh token. Remove Postline at myaccount.google.com/permissions and sign in again.")
+            throw PostlineError("Google did not return a refresh token. Remove Mailer at myaccount.google.com/permissions and sign in again.")
         }
         let profile = try await fetchProfile(accessToken: token.accessToken)
         let email = profile.email.lowercased()
         guard (token.scope ?? "").contains(Config.mailScope) else {
-            throw PostlineError("Postline needs permission to read and send your mail. Sign in again and tick every box on Google's screen.")
+            throw PostlineError("Mailer needs permission to read and send your mail. Sign in again and tick every box on Google's screen.")
         }
         Keychain.set(refresh, for: Self.tokenKey(email))
         sessions[email] = Session(accessToken: token.accessToken,

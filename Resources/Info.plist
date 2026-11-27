@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key><string>com.oiharshit.postline</string>
-    <key>CFBundleName</key><string>Postline</string>
-    <key>CFBundleDisplayName</key><string>Postline</string>
-    <key>CFBundleExecutable</key><string>Postline</string>
+    <key>CFBundleName</key><string>Mailer</string>
+    <key>CFBundleDisplayName</key><string>Mailer</string>
+    <key>CFBundleExecutable</key><string>Mailer</string>
     <key>CFBundleIconFile</key><string>Postline</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.1</string>

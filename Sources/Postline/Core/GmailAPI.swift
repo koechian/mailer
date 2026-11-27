@@ -175,7 +175,7 @@ enum GmailError: Error, LocalizedError {
         switch self {
         case .historyGone: "Gmail no longer has that change history."
         case .notFound: "That message is gone from Gmail."
-        case .rateLimited: "Gmail asked Postline to slow down for a minute."
+        case .rateLimited: "Gmail asked Mailer to slow down for a minute."
         }
     }
 }

@@ -8,7 +8,7 @@ struct PostlineApp: App {
     @State private var prefs = Preferences.shared
 
     var body: some Scene {
-        Window("Postline", id: "main") {
+        Window("Mailer", id: "main") {
             Group {
                 if !model.isDemo && (!prefs.onboarded || model.accounts.isEmpty) {
                     OnboardingView(model: model)
@@ -161,7 +161,7 @@ enum KeyShortcuts {
                 }
                 return nil
             }
-            guard NSApp.keyWindow?.identifier?.rawValue.contains("main") == true || NSApp.keyWindow?.title == "Postline" else { return event }
+            guard NSApp.keyWindow?.identifier?.rawValue.contains("main") == true || NSApp.keyWindow?.title == "Mailer" else { return event }
             switch event.charactersIgnoringModifiers {
             case "j": model.move(1)
             case "k": model.move(-1)

@@ -26,7 +26,7 @@ struct MenuBarView: View {
             }
             Divider()
         }
-        Button("Open Postline") { model.showMainWindow() }
+        Button("Open Mailer") { model.showMainWindow() }
         Button("Hide this icon") { model.hideMenuIcon() }
     }
 }

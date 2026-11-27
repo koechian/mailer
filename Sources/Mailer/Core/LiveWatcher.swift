@@ -53,12 +53,12 @@ actor LiveWatcher {
                 await onChange()
                 while !Task.isCancelled {
                     try await client.idle(maxSeconds: 9 * 60)
-                    guard await client.idleSupported else { Log.write("live \(email): server refused IDLE"); break }
+                    guard await client.idleSupported else { Log.warning("live \(email): server refused IDLE"); break }
                     Log.write("live \(email): Inbox changed, syncing")
                     await onChange()
                 }
             } catch {
-                Log.write("live \(email): dropped — \(error.localizedDescription) [\(error)]")
+                Log.warning("live \(email): dropped — \(error.localizedDescription) [\(error)]")
             }
             await client.disconnect()
             if Task.isCancelled { break }

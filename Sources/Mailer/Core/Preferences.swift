@@ -64,6 +64,15 @@ final class Preferences {
         didSet { UserDefaults.standard.set(companyLogos, forKey: "companyLogos") }
     }
 
+    /// Off by default: errors, crashes, hangs and timings go to the
+    /// GlitchTip address built into this copy of Mailer (Telemetry).
+    var sendDiagnostics: Bool {
+        didSet {
+            UserDefaults.standard.set(sendDiagnostics, forKey: "sendDiagnostics")
+            Telemetry.apply(enabled: sendDiagnostics)
+        }
+    }
+
     var onboarded: Bool {
         didSet { UserDefaults.standard.set(onboarded, forKey: "onboarded") }
     }
@@ -82,6 +91,7 @@ final class Preferences {
         onboarded = d.bool(forKey: "onboarded")
         loadRemoteImages = d.object(forKey: "loadRemoteImages") as? Bool ?? true
         companyLogos = d.bool(forKey: "companyLogos")
+        sendDiagnostics = d.bool(forKey: "sendDiagnostics")
         suggestReplies = d.object(forKey: "suggestReplies") as? Bool ?? true
         ghostText = d.object(forKey: "ghostText") as? Bool ?? true
         fixGrammar = d.object(forKey: "fixGrammar") as? Bool ?? true

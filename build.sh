@@ -31,6 +31,13 @@ xcrun metal --version >/dev/null 2>&1 || true   # mounts the Metal Toolchain
 swift build -c release --arch arm64 --product Mailer
 BIN="$(swift build -c release --arch arm64 --show-bin-path)/Mailer"
 
+# Debug symbols, so GlitchTip can turn a crash's addresses into function
+# names and lines. Kept next to the app (build/Mailer.app.dSYM).
+DSYM="$ROOT/build/Mailer.app.dSYM"
+rm -rf "$DSYM"
+mkdir -p "$ROOT/build"
+dsymutil "$BIN" -o "$DSYM"
+
 say "Assembling bundle…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -126,6 +133,35 @@ if [[ "$CLIENT_ID" == *.apps.googleusercontent.com ]]; then
 else
     say "No Google client ID yet — the app runs, but sign-in stays off until"
     say "you add one (README → Google setup). Try it now with: ./build.sh demo"
+fi
+
+# GlitchTip, for errors, crashes and timings (Telemetry.swift): its DSN from
+# MAILER_GLITCHTIP_DSN, else GlitchTipDSN.txt next to this script. Kept out
+# of the repository like the client ID. Without one, Settings has no
+# Diagnostics switch and nothing is ever sent. The commit names the build in
+# GlitchTip's releases.
+DSN="${MAILER_GLITCHTIP_DSN:-}"
+if [ -z "$DSN" ] && [ -f "$ROOT/GlitchTipDSN.txt" ]; then
+    DSN="$(tr -d '[:space:]' < "$ROOT/GlitchTipDSN.txt")"
+fi
+if [[ "$DSN" == https://*@*/* ]]; then
+    /usr/libexec/PlistBuddy -c "Add :MailerGlitchTipDSN string $DSN" "$APP/Contents/Info.plist"
+    say "Diagnostics: GlitchTip at $(sed -E 's#https://[^@]*@([^/]*)/.*#\1#' <<<"$DSN") (off until turned on in Settings)"
+fi
+COMMIT="$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || true)"
+[ -n "$COMMIT" ] && /usr/libexec/PlistBuddy -c "Add :MailerGitCommit string $COMMIT" "$APP/Contents/Info.plist"
+
+# The symbols go to GlitchTip when a token is at hand (GlitchTip → Profile →
+# Auth Tokens, with project:write), through sentry-cli, which GlitchTip
+# accepts. The server is GLITCHTIP_URL, else the DSN's; GLITCHTIP_ORG and
+# GLITCHTIP_PROJECT name the project. Published builds carry no DSN, so CI
+# sets GLITCHTIP_URL.
+GLITCHTIP_URL="${GLITCHTIP_URL:-$(sed -nE 's#(https://)[^@]*@([^/]*)/.*#\1\2#p' <<<"$DSN")}"
+if [ -n "$GLITCHTIP_URL" ] && [ -n "${GLITCHTIP_AUTH_TOKEN:-}" ] && command -v sentry-cli >/dev/null; then
+    say "Uploading debug symbols to GlitchTip…"
+    SENTRY_URL="$GLITCHTIP_URL" SENTRY_AUTH_TOKEN="$GLITCHTIP_AUTH_TOKEN" \
+        sentry-cli debug-files upload --org "${GLITCHTIP_ORG:-personal}" --project "${GLITCHTIP_PROJECT:-mailer}" "$DSYM" \
+        || say "WARNING: the debug symbols did not upload; crashes from this build will show addresses only"
 fi
 
 # A stable identity keeps the Keychain from re-asking after every build.

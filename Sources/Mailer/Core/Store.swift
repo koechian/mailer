@@ -106,7 +106,7 @@ final class Store: @unchecked Sendable {
         if migrateFromVersion1() { return }
         // A failed migration leaves a database the app cannot read. The copy
         // made before it started keeps the old mail; this one starts empty.
-        Log.write("store: migration failed; the previous database is kept at \(backupPath)")
+        Log.error("store: migration failed; the previous database is kept at \(backupPath)")
         sqlite3_close(db)
         for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) }
         open()

@@ -45,6 +45,8 @@ GoogleService-Info.plist
 
 # Your own Google OAuth client ID (README → Google setup)
 GoogleClientID.txt
+# Your own GlitchTip DSN (build.sh), for diagnostics
+GlitchTipDSN.txt
 
 # Screenshots and recordings stay out of git; README images are hosted on the
 # GitHub release instead.

@@ -46,7 +46,7 @@ actor SyncEngine {
     private func pause(_ email: String) {
         guard pausedUntil[email] == nil else { return }
         pausedUntil[email] = Date().addingTimeInterval(60)
-        Log.write("\(email): Gmail asked to slow down — pausing this account for 60 s")
+        Log.warning("\(email): Gmail asked to slow down — pausing this account for 60 s")
     }
 
     func setHandlers(onNewMail: @escaping @Sendable ([Message]) async -> Void,
@@ -103,7 +103,7 @@ actor SyncEngine {
             do { try await Performance.measure("sync.history") { try await syncOnce(email) } }
             catch GmailError.rateLimited { pause(email); return }
             catch {
-                Log.write("sync \(email) failed — \(error.localizedDescription)")
+                Log.error("sync \(email) failed", error)
             }
         } while rerun.contains(email)
     }
@@ -352,7 +352,7 @@ actor SyncEngine {
         } catch GmailError.rateLimited {
             pause(email)
         } catch {
-            Log.write("reconcile \(email) failed — \(error.localizedDescription)")
+            Log.error("reconcile \(email) failed", error)
         }
     }
 
@@ -388,7 +388,7 @@ actor SyncEngine {
         } catch GmailError.rateLimited {
             pause(email)
         } catch {
-            Log.write("redate \(email) stopped — \(error.localizedDescription); will retry")
+            Log.warning("redate \(email) stopped — \(error.localizedDescription); will retry")
         }
     }
 

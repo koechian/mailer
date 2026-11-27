@@ -2,6 +2,8 @@ import XCTest
 import OTPCore
 import SQLite3
 import WebKit
+import class Sentry.Options
+import class Sentry.SentrySDK
 @testable import Mailer
 
 final class OTPTests: XCTestCase {
@@ -496,6 +498,43 @@ final class HTMLLayoutTests: XCTestCase {
         let html = "<p>https://example.com/\(String(repeating: "a", count: 300))</p>"
         let width = try await layOut(html, script: "document.documentElement.scrollWidth")
         XCTAssertLessThanOrEqual(width, 600)
+    }
+}
+
+final class TelemetryTests: XCTestCase {
+    /// A build without a DSN (this test run, CI, anyone's own build) can
+    /// never send anything.
+    func testWithoutDSNNothingCanBeSent() {
+        XCTAssertNil(Telemetry.dsn)
+        XCTAssertFalse(Telemetry.isAvailable)
+        Telemetry.apply(enabled: true)
+        XCTAssertFalse(SentrySDK.isEnabled)
+        XCTAssertNil(Performance.begin("test.interval").span)
+    }
+
+    func testNetworkRequestsAndPersonalDataStayOut() {
+        let options = Options()
+        Telemetry.configure(options, dsn: "https://key@glitchtip.example.com/7")
+        XCTAssertFalse(options.sendDefaultPii)
+        XCTAssertFalse(options.enableNetworkTracking)
+        XCTAssertFalse(options.enableNetworkBreadcrumbs)
+        XCTAssertFalse(options.enableCaptureFailedRequests)
+        XCTAssertFalse(options.enableAutoPerformanceTracing)
+        XCTAssertFalse(options.enableAutoSessionTracking, "GlitchTip has no sessions")
+        XCTAssertTrue(options.enableCrashHandler)
+        XCTAssertTrue(options.enableAppHangTracking)
+    }
+
+    func testSyncIsSampledAndTheRestKeptWhole() {
+        XCTAssertEqual(Telemetry.sampleRate(operation: "sync.history"), 0.05)
+        XCTAssertEqual(Telemetry.sampleRate(operation: "reader.open"), 1)
+    }
+
+    func testOfflineFailuresAreNotIssues() {
+        XCTAssertTrue(Log.isConnectivityFailure(URLError(.notConnectedToInternet)))
+        XCTAssertTrue(Log.isConnectivityFailure(URLError(.timedOut)))
+        XCTAssertFalse(Log.isConnectivityFailure(URLError(.badServerResponse)))
+        XCTAssertFalse(Log.isConnectivityFailure(MailerError("Gmail said no")))
     }
 }
 

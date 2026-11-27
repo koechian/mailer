@@ -17,7 +17,11 @@ let package = Package(
         .package(url: "https://github.com/huggingface/swift-huggingface.git", from: "0.9.0"),
         // Updates: checks the release feed on GitHub, verifies and installs
         // new builds (see Core/Updates.swift).
-        .package(url: "https://github.com/sparkle-project/Sparkle.git", .upToNextMinor(from: "2.10.1"))
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", .upToNextMinor(from: "2.10.1")),
+        // Errors, crashes, hangs, timings and logs, sent to GlitchTip only
+        // when the owner turns diagnostics on (Telemetry.swift). Pinned: a
+        // newer major may send spans in a form GlitchTip does not read.
+        .package(url: "https://github.com/getsentry/sentry-cocoa.git", exact: "9.36.0")
     ],
     targets: [
         // OpenOTP's code detector (MIT, © 2026 jeninh), vendored unchanged so
@@ -38,7 +42,8 @@ let package = Package(
                 .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
                 .product(name: "HuggingFace", package: "swift-huggingface"),
-                .product(name: "Sparkle", package: "Sparkle")
+                .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "Sentry", package: "sentry-cocoa")
             ],
             path: "Sources/Mailer",
             swiftSettings: [.swiftLanguageMode(.v5)],
@@ -61,7 +66,7 @@ let package = Package(
         ),
         .testTarget(
             name: "MailerTests",
-            dependencies: ["Mailer", "OTPCore"],
+            dependencies: ["Mailer", "OTPCore", .product(name: "Sentry", package: "sentry-cocoa")],
             path: "Tests/MailerTests"
         )
     ]

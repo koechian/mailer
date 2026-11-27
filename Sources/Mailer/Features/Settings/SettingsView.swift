@@ -109,6 +109,15 @@ struct SettingsView: View {
                     updatesInstalled = Updates.shared.installsAutomatically
                 }
 
+                if let host = Telemetry.host {
+                    section("Diagnostics") {
+                        Toggle("Send errors, crashes and timings", isOn: $prefs.sendDiagnostics).font(.callout)
+                        Text("Sent to \(host) to find and fix problems. Error messages and log lines can name your accounts and attachments; the text of your emails is not sent.")
+                            .font(.caption).foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
                 section("General") {
                     Picker("Appearance", selection: $prefs.appearance) {
                         ForEach(Preferences.Appearance.allCases) { Text($0.title).tag($0) }

@@ -25,7 +25,8 @@ Needs macOS 15 or later on an Apple silicon Mac.
   its own category: Promotions, Social and Forums go to **Other**.
 - **Private by default.** Email loads in full with its tracking pixels removed first, so most
   senders can't tell when you opened it. Scripts never run and an email can't redirect the
-  reader. No analytics, no telemetry. See [Privacy](#privacy).
+  reader. No analytics; error and crash reporting is off unless you turn it on. See
+  [Privacy](#privacy).
 - **Export for AI.** **⇧⌘E** (or ⋯ → Export for AI…) turns a thread into one clean Markdown
   document for an AI assistant: each message once, oldest first, with sender, time and
   recipients, and you marked "(me)". Quoted replies, reply headers, signatures, "Sent from my
@@ -190,6 +191,21 @@ hf download mlx-community/Qwen3.5-4B-MLX-4bit
 It loads the first time you need it and is let go after 3 idle minutes. Settings → Writing help
 says which model is in use, and has a switch for each kind of help.
 
+### Error and crash reporting (optional)
+
+Mailer can send errors, crashes, hangs, timings and log lines to a GlitchTip (or Sentry)
+project of your own, through the Sentry SDK. Put the project's DSN in `GlitchTipDSN.txt` next
+to `build.sh` (or set `MAILER_GLITCHTIP_DSN`); it stays out of the repository. The app keeps
+it on your Mac, so the published updates, which carry none, go on reporting. Reporting is still
+off until you turn on Settings → Diagnostics. A Mac that has never run a build with a DSN has no
+switch and sends nothing.
+
+So that crashes show function names, `build.sh` writes `build/Mailer.app.dSYM` and uploads it
+with `sentry-cli` when `GLITCHTIP_AUTH_TOKEN` is set (a GlitchTip auth token with
+`project:write`). `GLITCHTIP_ORG` and `GLITCHTIP_PROJECT` name the project (default
+`personal`/`mailer`). For the published updates, CI does the same when the repository has the
+`GLITCHTIP_AUTH_TOKEN` and `GLITCHTIP_URL` secrets.
+
 ## Change it
 
 Everything is plain Swift, laid out by job. Comments say *why* things are the way they are,
@@ -213,6 +229,7 @@ including what was measured and what was tried first.
 | Notifications with Copy code | `Core/Notifier.swift` |
 | Suggested replies, ghost text, grammar | `Core/Writer.swift`, `Features/Compose/SmartEditor.swift` |
 | Timings | `Core/Performance.swift`, `tools/performance_report.py` |
+| Log lines, error and crash reporting | `Core/Log.swift`, `Core/Telemetry.swift` |
 | Icons (Hugeicons, exported by `tools/export-icons.mjs`) | `Resources/Icons` |
 
 Logs go to `~/Library/Logs/Postline.log`. (Mailer's data keeps Postline's folder names; see
@@ -221,8 +238,10 @@ the Roadmap.)
 ### Measuring performance
 
 The operations that have to stay fast are timed every time they run: opening an email
-(`reader.*`), listing a mailbox (`list.reload`) and syncing (`sync.*`). The timings stay on
-your Mac, in `~/Library/Logs/Postline-performance.jsonl`. To summarise them:
+(`reader.*`), listing a mailbox (`list.reload`) and syncing (`sync.*`). The timings are kept
+on your Mac, in `~/Library/Logs/Postline-performance.jsonl`, and with diagnostics on they also
+go to GlitchTip as transactions, the reader's steps as spans inside `reader.open` and
+`reader.page_load` (sync is sampled at 1 in 20). To summarise the local file:
 
 ```bash
 tools/performance_report.py --since 30          # last 30 minutes: median, p90, p99, worst
@@ -262,11 +281,15 @@ Single-key shortcuts are off while you write.
 
 ## Privacy
 
-Mailer has no server and sends nothing about you anywhere: no analytics, no telemetry, no crash
-reporting. Your mail, contacts and sign-in tokens stay on your Mac (database in
-`~/Library/Application Support/Postline`, tokens in the Keychain), and the app talks only to
-Google's own Gmail, People and sign-in endpoints. Writing help runs on your Mac. Timings stay
-on your Mac too.
+Mailer has no server and no analytics. Your mail, contacts and sign-in tokens stay on your Mac
+(database in `~/Library/Application Support/Postline`, tokens in the Keychain), and the app
+talks only to Google's own Gmail, People and sign-in endpoints. Writing help runs on your Mac.
+
+Error and crash reporting is off by default and exists only in a build given a GlitchTip DSN
+(see [Error and crash reporting](#error-and-crash-reporting-optional)). Turned on in Settings →
+Diagnostics, it sends errors, crashes, hangs, timings and log lines to that GlitchTip. Error
+messages and log lines can name your accounts and attachments; the text of your emails, network
+requests and the SDK's default user data are not sent.
 
 Email loads in full, but its tracking pixels (tiny or hidden images, and the open-tracking
 addresses of the common mailing tools) are removed first, so most senders can't tell when you

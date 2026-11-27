@@ -1,0 +1,44 @@
+# Builds the app bundle the way build.sh does and runs the tests, for every
+# pull request and every change to main. Signed ad hoc and without a Google
+# client ID: the bundle proves the build works, it is not for installing
+# (install with ./build.sh install on your own Mac).
+name: Build and test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # macOS 26 on Apple silicon, Xcode 26.6 by default: the same toolchain
+    # the app is developed with.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Restore the package cache
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: swiftpm-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build the app bundle
+        run: ./build.sh
+
+      - name: Run the tests
+        run: swift test

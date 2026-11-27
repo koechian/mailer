@@ -161,11 +161,11 @@ tools/performance_report.py --op reader --by remote --slowest 10
 
 | Timing | From → to |
 |---|---|
-| `reader.open` | clicking an email → every message in its thread shown |
+| `reader.open` | clicking an email → the text of every message in its thread shown |
 | `reader.thread_query` | reading the thread from the database |
 | `reader.prepare_html` | removing tracking pixels and wrapping the email's HTML |
 | `reader.webview_create` | creating the web view for one message |
-| `reader.dom_ready` | starting the page → its text laid out |
+| `reader.dom_ready` | starting the page → its text laid out and shown |
 | `reader.page_load` | starting the page → everything loaded, images included |
 | `list.reload` | redrawing the message list |
 | `sync.history`, `sync.reconcile` | one check with Gmail |

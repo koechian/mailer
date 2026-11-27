@@ -114,6 +114,8 @@ struct MessageBlock: View {
     let message: Message
     let isLast: Bool
     @State private var htmlHeight: CGFloat = 80
+    /// Images of this email still on their way.
+    @State private var loadingImages = 0
     @State private var showDetails = false
     /// Remote images loaded for this email only, while they are off in Settings.
     @State private var remoteContentOnce = false
@@ -184,10 +186,14 @@ struct MessageBlock: View {
             if !allowsRemote, HTMLView.referencesRemoteContent(html) {
                 RemoteContentBar { remoteContentOnce = true }
             }
-            HTMLView(html: html, allowsRemoteContent: allowsRemote, height: $htmlHeight,
+            HTMLView(html: html, allowsRemoteContent: allowsRemote, height: $htmlHeight, loadingImages: $loadingImages,
                      onReady: { [threadID = message.threadID] in ReaderTiming.messageReady(threadID: threadID) })
                 .frame(height: htmlHeight)
                 .frame(maxWidth: .infinity)
+                .overlay(alignment: .topTrailing) {
+                    if loadingImages > 0 { ImagesLoadingBadge(count: loadingImages).padding(8).transition(.opacity) }
+                }
+                .animation(.easeOut(duration: 0.2), value: loadingImages > 0)
                 .padding(paper ? 20 : 0)
                 .background(paper ? Color.white : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: paper ? Theme.Radius.card : 0, style: .continuous))
@@ -214,6 +220,28 @@ struct MessageBlock: View {
                 }
             }
         }
+    }
+}
+
+/// Over the corner of an email while its images load; the images
+/// themselves shimmer in their space (HTMLView).
+struct ImagesLoadingBadge: View {
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.mini)
+            Text(count == 1 ? "Loading 1 image" : "Loading \(count) images")
+                .font(.caption).foregroundStyle(Color(white: 0.35))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.white.opacity(0.92), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.black.opacity(0.08)))
+        .shadow(color: .black.opacity(0.06), radius: 4, y: 1)
+        // It sits on the email's white page in dark mode too.
+        .environment(\.colorScheme, .light)
+        .accessibilityLabel(count == 1 ? "Loading 1 image" : "Loading \(count) images")
     }
 }
 

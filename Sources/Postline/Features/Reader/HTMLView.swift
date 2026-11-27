@@ -7,35 +7,38 @@ import WebKit
 /// The mail's own scripts never run; links open in the default browser.
 /// With `allowsRemoteContent`, remote images, style sheets and fonts load,
 /// after TrackingImageFilter has removed the open-tracking pixels; without
-/// it, nothing remote loads. The page may not
-/// navigate anywhere by itself either (a meta refresh or a form would
-/// otherwise load a remote page inside the reader).
-/// The height is measured once the page loads and again as late images
-/// arrive and push it taller.
+/// it, nothing remote loads. The page may not navigate anywhere by itself
+/// either (a meta refresh or a form would otherwise load a remote page
+/// inside the reader).
+///
+/// The text is drawn as soon as it is laid out, and images fill in as they
+/// arrive. Until 2026-11-27 nothing was drawn before every image had loaded:
+/// one slow image server kept an email blank for 8 s although its text was
+/// ready after 0.65 s (measured). A small script of Postline's own, in a
+/// world of its own that the email cannot reach, reports the page's height
+/// as it changes and how many images are still loading; each of those shows
+/// a placeholder in the space it will take.
 struct HTMLView: NSViewRepresentable {
     let html: String
     var allowsRemoteContent = false
     @Binding var height: CGFloat
-    /// Called once the page is ready, for the reader's timing.
+    /// Images still loading, for the reader's loading indicator.
+    @Binding var loadingImages: Int
+    /// Called once the text is shown, for the reader's timing.
     var onReady: (() -> Void)?
 
-    func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
+    func makeCoordinator() -> Coordinator { Coordinator(height: $height, loadingImages: $loadingImages) }
 
     func makeNSView(context: Context) -> PassiveWebView {
         let view = Performance.measure("reader.webview_create") {
             let config = WKWebViewConfiguration()
             config.defaultWebpagePreferences.allowsContentJavaScript = false
-            config.suppressesIncrementalRendering = true
             // No cookies, cache or storage shared between emails or kept on disk.
             config.websiteDataStore = .nonPersistent()
-            // Postline's own script, not the email's (those stay off): it
-            // reports when the text is laid out, before images finish, for
-            // the timing. It runs in its own world, where the email's page
-            // cannot reach it.
             let controller = config.userContentController
-            controller.addUserScript(WKUserScript(source: Self.domReadyScript, injectionTime: .atDocumentEnd,
+            controller.addUserScript(WKUserScript(source: Self.pageScript, injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true, in: .defaultClient))
-            controller.add(context.coordinator, contentWorld: .defaultClient, name: Self.timingChannel)
+            controller.add(context.coordinator, contentWorld: .defaultClient, name: Self.pageChannel)
             return PassiveWebView(frame: .zero, configuration: config)
         }
         view.navigationDelegate = context.coordinator
@@ -52,12 +55,8 @@ struct HTMLView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ view: PassiveWebView, coordinator: Coordinator) {
-        view.configuration.userContentController.removeScriptMessageHandler(forName: timingChannel, contentWorld: .defaultClient)
+        view.configuration.userContentController.removeScriptMessageHandler(forName: pageChannel, contentWorld: .defaultClient)
     }
-
-    private static let timingChannel = "timing"
-    private static let domReadyScript =
-        "webkit.messageHandlers.\(timingChannel).postMessage(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))"
 
     private var pageKey: String { (allowsRemoteContent ? "remote:" : "local:") + html }
 
@@ -75,9 +74,7 @@ struct HTMLView: NSViewRepresentable {
             }
             return Self.wrap(page, allowsRemoteContent: allowsRemoteContent)
         }
-        coordinator.pageDetail = ["kb": kilobytes, "remote": allowsRemoteContent ? "on" : "off", "trackers": "\(removed)"]
-        coordinator.pageLoad = Performance.begin("reader.page_load")
-        coordinator.domReported = false
+        coordinator.begin(detail: ["kb": kilobytes, "remote": allowsRemoteContent ? "on" : "off", "trackers": "\(removed)"])
         view.loadHTMLString(document, baseURL: nil)
     }
 
@@ -91,7 +88,9 @@ struct HTMLView: NSViewRepresentable {
     }
 
     /// Mail is designed for a white page; it gets one, with the system font
-    /// for mail that names none and nothing wider than the reader.
+    /// for mail that names none and nothing wider than the reader. An image
+    /// still loading shows a soft shimmer in its space (`postline-loading`,
+    /// set by `pageScript`); images that say their size keep that space.
     static func wrap(_ html: String, allowsRemoteContent: Bool = false) -> String {
         """
         <!doctype html><html><head><meta charset="utf-8">
@@ -104,6 +103,11 @@ struct HTMLView: NSViewRepresentable {
           body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: #3f3f46;
                  word-wrap: break-word; overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; }
           img { max-width: 100% !important; height: auto; }
+          img.postline-loading { background: linear-gradient(90deg, #f4f4f5 25%, #e9e9ec 37%, #f4f4f5 63%);
+                                 background-size: 400% 100%; border-radius: 4px;
+                                 animation: postline-shimmer 1.4s ease-in-out infinite; }
+          @keyframes postline-shimmer { from { background-position: 100% 50%; } to { background-position: 0 50%; } }
+          @media (prefers-reduced-motion: reduce) { img.postline-loading { animation: none; } }
           table { max-width: 100% !important; }
           pre { white-space: pre-wrap; }
           a { color: #2563eb; }
@@ -112,44 +116,93 @@ struct HTMLView: NSViewRepresentable {
         """
     }
 
+    private static let pageChannel = "page"
+
+    /// Postline's script, run in its own world once the document is parsed:
+    /// marks the images still loading, then reports `ready` (with the height
+    /// and how many images are loading), `height` whenever the page changes
+    /// size, and `images` as each image arrives or fails.
+    private static let pageScript = """
+    (() => {
+      const channel = webkit.messageHandlers.\(pageChannel);
+      const height = () => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      const loading = new Set();
+      for (const image of document.images) {
+        if (image.complete) continue;
+        loading.add(image);
+        image.classList.add('postline-loading');
+        const arrived = () => {
+          image.classList.remove('postline-loading');
+          loading.delete(image);
+          channel.postMessage({ kind: 'images', loading: loading.size, height: height() });
+        };
+        image.addEventListener('load', arrived, { once: true });
+        image.addEventListener('error', arrived, { once: true });
+      }
+      channel.postMessage({ kind: 'ready', loading: loading.size, height: height() });
+      new ResizeObserver(() => channel.postMessage({ kind: 'height', height: height() }))
+        .observe(document.documentElement);
+    })();
+    """
+
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         @Binding var height: CGFloat
+        @Binding var loadingImages: Int
         var loaded: String?
         var onReady: (() -> Void)?
         /// The page being loaded, for the timing.
-        var pageLoad: Performance.Interval?
-        var pageDetail: [String: String] = [:]
-        var domReported = false
-        init(height: Binding<CGFloat>) { _height = height }
+        private var pageLoad: Performance.Interval?
+        private var pageDetail: [String: String] = [:]
+        private var readyReported = false
 
-        /// The text is laid out (DOMContentLoaded); images may still be
-        /// loading.
+        init(height: Binding<CGFloat>, loadingImages: Binding<Int>) {
+            _height = height
+            _loadingImages = loadingImages
+        }
+
+        func begin(detail: [String: String]) {
+            pageDetail = detail
+            pageLoad = Performance.begin("reader.page_load")
+            readyReported = false
+        }
+
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard !domReported, let pageLoad else { return }
-            domReported = true
-            Performance.record("reader.dom_ready", ms: pageLoad.elapsed, detail: pageDetail)
-        }
-
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            finishTiming(["failed": "yes"])
-        }
-
-        private func finishTiming(_ extra: [String: String] = [:]) {
-            pageLoad?.end(pageDetail.merging(extra) { $1 })
-            pageLoad = nil
-            onReady?()
+            guard let body = message.body as? [String: Any] else { return }
+            if let h = body["height"] as? CGFloat { apply(height: h) }
+            if let count = body["loading"] as? Int, loadingImages != count { loadingImages = count }
+            if body["kind"] as? String == "ready" { reportReady() }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            finishTiming()
-            for delay in [0.0, 0.4, 1.2, 3.0] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak webView] in
-                    webView?.evaluateJavaScript("Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)") { value, _ in
-                        guard let h = value as? CGFloat, h > 0, abs(h - (self?.height ?? 0)) > 1 else { return }
-                        self?.height = h
-                    }
-                }
+            finishLoading()
+            // A last measurement, in case the script could not report.
+            webView.evaluateJavaScript("Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)") { [weak self] value, _ in
+                if let h = value as? CGFloat { self?.apply(height: h) }
             }
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            finishLoading(["failed": "yes"])
+        }
+
+        private func apply(height h: CGFloat) {
+            guard h > 0, abs(h - height) > 1 else { return }
+            height = h
+        }
+
+        /// The text is laid out and drawn; images may still be loading.
+        private func reportReady() {
+            guard !readyReported else { return }
+            readyReported = true
+            if let pageLoad { Performance.record("reader.dom_ready", ms: pageLoad.elapsed, detail: pageDetail) }
+            onReady?()
+        }
+
+        private func finishLoading(_ extra: [String: String] = [:]) {
+            pageLoad?.end(pageDetail.merging(extra) { $1 })
+            pageLoad = nil
+            if loadingImages != 0 { loadingImages = 0 }
+            reportReady()
         }
 
         /// Only the email itself loads in the view (`about:blank`, from

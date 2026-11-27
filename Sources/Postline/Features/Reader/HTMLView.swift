@@ -5,10 +5,16 @@ import WebKit
 /// own scroll view (the web view never scrolls by itself).
 ///
 /// The mail's own scripts never run; links open in the default browser.
+/// With `allowsRemoteContent`, remote images, style sheets and fonts load,
+/// after TrackingImageFilter has removed the open-tracking pixels; without
+/// it, nothing remote loads. The page may not
+/// navigate anywhere by itself either (a meta refresh or a form would
+/// otherwise load a remote page inside the reader).
 /// The height is measured once the page loads and again as late images
 /// arrive and push it taller.
 struct HTMLView: NSViewRepresentable {
     let html: String
+    var allowsRemoteContent = false
     @Binding var height: CGFloat
 
     func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
@@ -17,25 +23,45 @@ struct HTMLView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences.allowsContentJavaScript = false
         config.suppressesIncrementalRendering = true
+        // No cookies, cache or storage shared between emails or kept on disk.
+        config.websiteDataStore = .nonPersistent()
         let view = PassiveWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.setValue(false, forKey: "drawsBackground")
-        view.loadHTMLString(Self.wrap(html), baseURL: nil)
-        context.coordinator.loaded = html
+        load(view, context: context)
         return view
     }
 
     func updateNSView(_ view: PassiveWebView, context: Context) {
-        guard context.coordinator.loaded != html else { return }
-        context.coordinator.loaded = html
-        view.loadHTMLString(Self.wrap(html), baseURL: nil)
+        guard context.coordinator.loaded != pageKey else { return }
+        load(view, context: context)
+    }
+
+    private var pageKey: String { (allowsRemoteContent ? "remote:" : "local:") + html }
+
+    private func load(_ view: PassiveWebView, context: Context) {
+        context.coordinator.loaded = pageKey
+        let page = allowsRemoteContent ? TrackingImageFilter.strip(html).html : html
+        view.loadHTMLString(Self.wrap(page, allowsRemoteContent: allowsRemoteContent), baseURL: nil)
+    }
+
+    /// The Content-Security-Policy for the page. Blocked: only inline styles
+    /// and images embedded in the email itself. Allowed: remote images,
+    /// style sheets, fonts and media too. Scripts and frames never load.
+    static func contentPolicy(allowsRemoteContent: Bool) -> String {
+        allowsRemoteContent
+            ? "default-src 'none'; img-src * data: cid:; style-src * 'unsafe-inline'; font-src * data:; media-src *"
+            : "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:"
     }
 
     /// Mail is designed for a white page; it gets one, with the system font
     /// for mail that names none and nothing wider than the reader.
-    static func wrap(_ html: String) -> String {
+    static func wrap(_ html: String, allowsRemoteContent: Bool = false) -> String {
         """
         <!doctype html><html><head><meta charset="utf-8">
+        <meta http-equiv="Content-Security-Policy" content="\(contentPolicy(allowsRemoteContent: allowsRemoteContent))">
+        <meta http-equiv="x-dns-prefetch-control" content="off">
+        <meta name="referrer" content="no-referrer">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
           html, body { margin: 0; padding: 0; background: #fff; }
@@ -66,15 +92,43 @@ struct HTMLView: NSViewRepresentable {
             }
         }
 
+        /// Only the email itself loads in the view (`about:blank`, from
+        /// `loadHTMLString`). A clicked link opens in the browser; every other
+        /// navigation (meta refresh, form submission, frame) is refused.
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if action.navigationType == .linkActivated, let url = action.request.url {
-                NSWorkspace.shared.open(url)
+            let url = action.request.url
+            if action.navigationType == .linkActivated {
+                if let url, HTMLView.opensExternally(url) { NSWorkspace.shared.open(url) }
                 decisionHandler(.cancel)
-            } else {
+            } else if action.targetFrame?.isMainFrame == true, url?.scheme == "about" {
                 decisionHandler(.allow)
+            } else {
+                decisionHandler(.cancel)
             }
         }
+    }
+}
+
+extension HTMLView {
+    /// Links the browser or Mail can take: web pages and email addresses.
+    static func opensExternally(_ url: URL) -> Bool {
+        ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "")
+    }
+
+    private static let remoteReference = try! NSRegularExpression(pattern: #"""
+    (?ix)
+      \b(?:src|srcset|background|poster)\s*=\s*["']?\s*(?:https?:)?//
+    | url\(\s*["']?\s*(?:https?:)?//
+    | @import\s+["']?\s*(?:url\(\s*["']?)?\s*(?:https?:)?//
+    | <link\b[^>]*\bhref\s*=\s*["']?\s*(?:https?:)?//
+    """#)
+
+    /// True when the email asks for something from the network (an image, a
+    /// style sheet, a font); with remote images off, the reader then offers to
+    /// load them.
+    static func referencesRemoteContent(_ html: String) -> Bool {
+        remoteReference.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)) != nil
     }
 }
 

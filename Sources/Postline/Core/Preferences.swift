@@ -52,6 +52,18 @@ final class Preferences {
     var ghostText: Bool { didSet { UserDefaults.standard.set(ghostText, forKey: "ghostText") } }
     var fixGrammar: Bool { didSet { UserDefaults.standard.set(fixGrammar, forKey: "fixGrammar") } }
 
+    /// On by default: email loads in full, with its tracking images removed
+    /// first (TrackingImageFilter). Off blocks every remote image and style.
+    var loadRemoteImages: Bool {
+        didSet { UserDefaults.standard.set(loadRemoteImages, forKey: "loadRemoteImages") }
+    }
+
+    /// Off by default: a company logo is looked up through Google's favicon
+    /// service, which then learns the domain of everyone who writes to you.
+    var companyLogos: Bool {
+        didSet { UserDefaults.standard.set(companyLogos, forKey: "companyLogos") }
+    }
+
     var onboarded: Bool {
         didSet { UserDefaults.standard.set(onboarded, forKey: "onboarded") }
     }
@@ -68,6 +80,8 @@ final class Preferences {
         notify = Notify(rawValue: d.string(forKey: "notify") ?? "") ?? .all
         autoCopyCodes = d.bool(forKey: "autoCopyCodes")
         onboarded = d.bool(forKey: "onboarded")
+        loadRemoteImages = d.object(forKey: "loadRemoteImages") as? Bool ?? true
+        companyLogos = d.bool(forKey: "companyLogos")
         suggestReplies = d.object(forKey: "suggestReplies") as? Bool ?? true
         ghostText = d.object(forKey: "ghostText") as? Bool ?? true
         fixGrammar = d.object(forKey: "fixGrammar") as? Bool ?? true

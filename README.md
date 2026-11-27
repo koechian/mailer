@@ -27,8 +27,8 @@ your Mac, so opening, switching and searching never wait on the network.
   Everything can be undone with ⌘Z.
 - **Starts empty.** Only mail that arrives after you connect is downloaded. Import older mail
   (7 days, 30 days, 3 months, 1 year or everything) at sign-in or later in Settings.
-- **Several Gmail accounts**, one Inbox or one at a time. Real photos from Google Contacts,
-  company logos, and initials as a fallback.
+- **Several Gmail accounts**, one Inbox or one at a time. Real photos from Google Contacts
+  and initials as a fallback; company logos if you turn them on in Settings.
 - **Send as any address** Gmail lets you send as, with 5 seconds to Undo.
 
 ![Reading an email, with suggested replies](https://github.com/oiharshit/postline/releases/latest/download/reader.png)
@@ -159,6 +159,12 @@ unread; **/** or ⌘F searches; ⌘↩ sends; ⌘Z undoes. Single-key shortcuts 
 Postline has no server. Your mail, contacts and sign-in tokens stay on your Mac (database in
 `~/Library/Application Support/Postline`, tokens in the Keychain), and the app talks only to
 Google's own Gmail, People and sign-in endpoints. Writing help runs on your Mac.
+
+Email loads in full, but its tracking pixels (tiny or hidden images, and the open-tracking
+addresses of the common mailing tools) are removed first, so most senders can't tell when you
+opened their mail. To block every remote image instead, turn off Settings → Privacy → Load
+remote images. Scripts never run, and an email can't redirect the reader to a web page. Company logos are off by default: they're looked up through Google's favicon service,
+which would see the domain of each company that writes to you.
 
 ## Credits
 

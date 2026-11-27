@@ -72,6 +72,20 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(Theme.muted)
                 }
 
+                section("Privacy") {
+                    Toggle("Load remote images", isOn: $prefs.loadRemoteImages).font(.callout)
+                    Text("Tracking pixels are removed before an email loads, so most senders can't tell when you opened it. Turn this off to block every remote image.")
+                        .font(.caption).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Toggle("Show company logos", isOn: $prefs.companyLogos).font(.callout)
+                    Text("Logos are looked up through Google's favicon service, which sees the domain of each company that writes to you.")
+                        .font(.caption).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .onChange(of: prefs.companyLogos) { _, on in
+                    if on { Avatars.shared.forgetMisses() }
+                }
+
                 section("General") {
                     Picker("Appearance", selection: $prefs.appearance) {
                         ForEach(Preferences.Appearance.allCases) { Text($0.title).tag($0) }

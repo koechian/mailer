@@ -263,3 +263,101 @@ final class MenuIconClockTests: XCTestCase {
         XCTAssertNil(c.nextChange)
     }
 }
+
+final class RemoteContentTests: XCTestCase {
+    func testDetectsRemoteImagesStylesAndFonts() {
+        for html in [
+            #"<img src="https://t.example.com/open.gif" width="1" height="1">"#,
+            #"<img src='//cdn.example.com/logo.png'>"#,
+            #"<img srcset="https://example.com/a.png 2x">"#,
+            #"<td background="http://example.com/bg.jpg">"#,
+            #"<div style="background-image: url('https://example.com/bg.png')">"#,
+            #"<link rel="stylesheet" href="https://example.com/mail.css">"#,
+            #"<style>@import url("https://fonts.example.com/f.css");</style>"#
+        ] {
+            XCTAssertTrue(HTMLView.referencesRemoteContent(html), html)
+        }
+    }
+
+    func testIgnoresLinksAndEmbeddedImages() {
+        for html in [
+            #"<a href="https://example.com/unsubscribe">Unsubscribe</a>"#,
+            #"<img src="cid:logo@example.com">"#,
+            #"<img src="data:image/png;base64,iVBORw0KGgo=">"#,
+            "<p>See https://example.com for details</p>"
+        ] {
+            XCTAssertFalse(HTMLView.referencesRemoteContent(html), html)
+        }
+    }
+
+    func testBlockedPolicyAllowsNoNetworkSources() {
+        let policy = HTMLView.contentPolicy(allowsRemoteContent: false)
+        XCTAssertTrue(policy.hasPrefix("default-src 'none'"))
+        XCTAssertFalse(policy.contains("*"))
+        XCTAssertFalse(policy.contains("http"))
+        XCTAssertTrue(HTMLView.wrap("<p>hi</p>").contains(policy))
+    }
+
+    func testAllowedPolicyStillBlocksScriptsAndFrames() {
+        let policy = HTMLView.contentPolicy(allowsRemoteContent: true)
+        XCTAssertTrue(policy.hasPrefix("default-src 'none'"))
+        XCTAssertFalse(policy.contains("script-src"))
+        XCTAssertFalse(policy.contains("frame-src"))
+    }
+
+    func testOnlyWebAndMailLinksOpenExternally() {
+        XCTAssertTrue(HTMLView.opensExternally(URL(string: "https://example.com")!))
+        XCTAssertTrue(HTMLView.opensExternally(URL(string: "mailto:someone@example.com")!))
+        XCTAssertFalse(HTMLView.opensExternally(URL(string: "file:///etc/passwd")!))
+        XCTAssertFalse(HTMLView.opensExternally(URL(string: "javascript:alert(1)")!))
+    }
+}
+
+final class TrackingImageFilterTests: XCTestCase {
+    func testRemovesPixelsByShape() {
+        for tag in [
+            #"<img src="https://e.example.com/o/abc123" width="1" height="1">"#,
+            #"<img width=1 height=1 src=https://e.example.com/x>"#,
+            #"<img src="https://e.example.com/x" width="0" height="0" border="0">"#,
+            #"<img src="https://e.example.com/x" width="1">"#,
+            #"<img src="https://e.example.com/x" style="width:1px;height:1px">"#,
+            #"<img src="https://e.example.com/x" style="display: none">"#,
+            #"<img src="https://e.example.com/x" style="visibility:hidden">"#,
+            #"<img src="https://e.example.com/x" style="opacity:0;">"#,
+            #"<img src="//e.example.com/x" style="max-height:0px;overflow:hidden">"#
+        ] {
+            XCTAssertTrue(TrackingImageFilter.isTracker(tag), tag)
+        }
+    }
+
+    func testRemovesKnownTrackingAddresses() {
+        for tag in [
+            #"<img src="https://example.us1.list-manage.com/track/open.php?u=1&id=2&e=3">"#,
+            #"<img src="https://u123.ct.sendgrid.net/wf/open?upn=abc" alt="">"#,
+            #"<img src="https://mailtrack.io/trace/mail/abc.png">"#,
+            #"<img src="https://news.example.com/pixel.gif?id=9">"#
+        ] {
+            XCTAssertTrue(TrackingImageFilter.isTracker(tag), tag)
+        }
+    }
+
+    func testKeepsRealImagesSpacersAndEmbeddedImages() {
+        for tag in [
+            #"<img src="https://cdn.example.com/hero.jpg" width="600" height="300">"#,
+            #"<img src="https://cdn.example.com/logo.png">"#,
+            #"<img src="https://cdn.example.com/spacer.gif" width="1" height="20">"#,
+            #"<img src="https://cdn.example.com/a.png" style="max-width:100%;height:auto">"#,
+            #"<img src="cid:logo@example.com" width="1" height="1">"#,
+            #"<img src="data:image/gif;base64,R0lGOD" width="1" height="1">"#
+        ] {
+            XCTAssertFalse(TrackingImageFilter.isTracker(tag), tag)
+        }
+    }
+
+    func testStripRemovesOnlyTrackers() {
+        let html = #"<p>Hi</p><img src="https://cdn.example.com/hero.jpg" width="600"><img src="https://t.example.com/o.gif" width="1" height="1"><p>Bye</p>"#
+        let result = TrackingImageFilter.strip(html)
+        XCTAssertEqual(result.removed, 1)
+        XCTAssertEqual(result.html, #"<p>Hi</p><img src="https://cdn.example.com/hero.jpg" width="600"><p>Bye</p>"#)
+    }
+}

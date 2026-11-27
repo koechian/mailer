@@ -9,7 +9,9 @@ import Observation
 /// 2. **People you know** — the photo Google Contacts holds for that address,
 ///    from your contacts or the "other contacts" Gmail saves for everyone you
 ///    have emailed. Google's generated letter tiles are skipped.
-/// 3. **Companies** — the logo of the sender's domain (github.com, deel.com…).
+/// 3. **Companies** — the logo of the sender's domain (github.com, deel.com…),
+///    only when the person turned company logos on in Settings: the lookup
+///    goes through Google's favicon service, which sees the domain.
 ///    Free-mail domains like gmail.com are skipped: their logo would put the
 ///    same "G" beside every friend.
 /// 4. **Everyone else** — initials on a colour picked from the address, so a
@@ -73,7 +75,7 @@ final class Avatars {
             if data == nil, let account, ProcessInfo.processInfo.environment["POSTLINE_DEMO"] != "1" {
                 data = await contactPhoto(key, account: account)
             }
-            if data == nil {
+            if data == nil, Preferences.shared.companyLogos {
                 data = await Self.domainLogo(for: key)
                 isLogo = data != nil
             }
@@ -86,6 +88,13 @@ final class Avatars {
                 UserDefaults.standard.set(misses.mapValues(\.timeIntervalSince1970), forKey: "avatar.misses")
             }
         }
+    }
+
+    /// Forgets every "nothing found", so addresses are looked up again (after
+    /// company logos are turned on).
+    func forgetMisses() {
+        misses = [:]
+        UserDefaults.standard.removeObject(forKey: "avatar.misses")
     }
 
     // MARK: Google Contacts

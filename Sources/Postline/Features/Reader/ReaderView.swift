@@ -115,6 +115,8 @@ struct MessageBlock: View {
     let isLast: Bool
     @State private var htmlHeight: CGFloat = 80
     @State private var showDetails = false
+    /// Remote images loaded for this email only, while they are off in Settings.
+    @State private var remoteContentOnce = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -178,7 +180,11 @@ struct MessageBlock: View {
             // card; in dark mode it gets a rounded sheet of paper with room
             // around it rather than a hard white block.
             let paper = scheme == .dark
-            HTMLView(html: html, height: $htmlHeight)
+            let allowsRemote = remoteContentOnce || Preferences.shared.loadRemoteImages
+            if !allowsRemote, HTMLView.referencesRemoteContent(html) {
+                RemoteContentBar { remoteContentOnce = true }
+            }
+            HTMLView(html: html, allowsRemoteContent: allowsRemote, height: $htmlHeight)
                 .frame(height: htmlHeight)
                 .frame(maxWidth: .infinity)
                 .padding(paper ? 20 : 0)
@@ -207,6 +213,26 @@ struct MessageBlock: View {
                 }
             }
         }
+    }
+}
+
+/// Shown above an email whose remote images are blocked (remote images are
+/// off in Settings), with a button to load them for this email.
+struct RemoteContentBar: View {
+    let loadImages: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            IconView(.shield, size: 15).foregroundStyle(Theme.muted)
+            Text("Remote images are blocked.")
+                .font(.caption).foregroundStyle(Theme.muted)
+            Spacer(minLength: 8)
+            Button("Load images", action: loadImages)
+                .buttonStyle(QuietButtonStyle(height: 28, fullWidth: false))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .card(radius: Theme.Radius.control)
     }
 }
 

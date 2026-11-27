@@ -30,12 +30,16 @@ jobs:
           xcodebuild -version
           swift --version
 
+      # Compiled modules record the folder they were built in, so a cache
+      # from another checkout folder breaks the build: renaming the
+      # repository from postline to mailer moved it (2026-11-27). The
+      # repository's name is part of the key for that reason.
       - name: Restore the package cache
         uses: actions/cache@v4
         with:
           path: .build
-          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
-          restore-keys: swiftpm-${{ runner.os }}-${{ runner.arch }}-
+          key: swiftpm-${{ github.repository }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: swiftpm-${{ github.repository }}-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build the app bundle
         run: ./build.sh

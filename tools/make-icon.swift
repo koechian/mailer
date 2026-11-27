@@ -1,7 +1,7 @@
 // Draws Mailer's app icon — the rail's dark tile with the Hugeicons mail
 // glyph — at every size macOS wants, then `iconutil` packs them.
 //
-//   swift tools/make-icon.swift Resources/Icons/mail.svg build/Postline.iconset
+//   swift tools/make-icon.swift Resources/Icons/mail.svg build/Mailer.iconset
 import AppKit
 
 let args = CommandLine.arguments

@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Postline",
+    name: "Mailer",
     // Same floor as Cued: macOS 15. The SVG icons load through NSImage, which
     // has read SVG since macOS 14; Apple's on-device model (the writing
     // fallback) is macOS 26 and sits behind availability checks.
@@ -27,7 +27,7 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
-            name: "Postline",
+            name: "Mailer",
             dependencies: [
                 "OTPCore",
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
@@ -36,7 +36,7 @@ let package = Package(
                 .product(name: "Tokenizers", package: "swift-transformers"),
                 .product(name: "HuggingFace", package: "swift-huggingface")
             ],
-            path: "Sources/Postline",
+            path: "Sources/Mailer",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .linkedLibrary("sqlite3"),
@@ -54,9 +54,9 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "PostlineTests",
-            dependencies: ["Postline", "OTPCore"],
-            path: "Tests/PostlineTests"
+            name: "MailerTests",
+            dependencies: ["Mailer", "OTPCore"],
+            path: "Tests/MailerTests"
         )
     ]
 )

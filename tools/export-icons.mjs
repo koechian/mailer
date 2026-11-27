@@ -1,4 +1,4 @@
-// Exports the Hugeicons Postline uses (free set, MIT — LICENSE in the npm
+// Exports the Hugeicons Mailer uses (free set, MIT — LICENSE in the npm
 // package @hugeicons/core-free-icons) to plain SVG files in Resources/Icons.
 //
 //   npm pack @hugeicons/core-free-icons && tar -xzf hugeicons-core-free-icons-*.tgz
@@ -15,7 +15,7 @@ import url from 'node:url'
 const [, , esmDir] = process.argv
 if (!esmDir) { console.error('usage: node tools/export-icons.mjs <dist/esm>'); process.exit(1) }
 
-// Postline name → Hugeicons name.
+// Mailer name → Hugeicons name.
 const ICONS = {
   inbox: 'Inbox', mail: 'Mail01', mailOpen: 'MailOpen01', compose: 'MailAdd01',
   sent: 'MailSend01', reply: 'ArrowTurnBackward', forward: 'ArrowTurnForward', drafts: 'Note01',

@@ -7,7 +7,7 @@
 #
 #   ./build.sh          release build into build/Mailer.app
 #   ./build.sh run      build, then (re)launch it
-#   ./build.sh demo     build, then launch with sample mail (POSTLINE_DEMO=1)
+#   ./build.sh demo     build, then launch with sample mail (MAILER_DEMO=1)
 #   ./build.sh install  build, then copy to /Applications
 #   ./build.sh release  notarized build/Mailer.dmg for sharing (needs a
 #                       Developer ID certificate and a notarytool profile)
@@ -15,8 +15,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
-# The app is called Mailer; the Swift package, its sources and the data
-# folders keep the name Postline it was forked from (2026-11-27).
+# Mailer is a fork of Postline. The app ID below, the Keychain entry and the
+# data folders (~/Library/Application Support/Postline, ~/Library/Logs/
+# Postline*.log) keep Postline's name: renaming them would sign every account
+# out and leave the mail behind (2026-11-27).
 APP="$ROOT/build/Mailer.app"
 BUNDLE_ID="com.oiharshit.postline"
 
@@ -26,8 +28,8 @@ say() { printf '\033[2m›\033[0m %s\n' "$1"; }
 say "Compiling (release)…"
 xcrun metal --version >/dev/null 2>&1 || true   # mounts the Metal Toolchain
 "$ROOT/tools/fix-metal-path.sh"
-swift build -c release --arch arm64 --product Postline
-BIN="$(swift build -c release --arch arm64 --show-bin-path)/Postline"
+swift build -c release --arch arm64 --product Mailer
+BIN="$(swift build -c release --arch arm64 --show-bin-path)/Mailer"
 
 say "Assembling bundle…"
 rm -rf "$APP"
@@ -77,27 +79,27 @@ else
 fi
 
 # App icon, regenerated only when the glyph changes.
-ICNS="$ROOT/build/Postline.icns"
+ICNS="$ROOT/build/Mailer.icns"
 if [ ! -f "$ICNS" ] || [ "$ROOT/Resources/Icons/mail.svg" -nt "$ICNS" ]; then
     say "Drawing the app icon…"
-    rm -rf "$ROOT/build/Postline.iconset"
-    swift "$ROOT/tools/make-icon.swift" "$ROOT/Resources/Icons/mail.svg" "$ROOT/build/Postline.iconset"
-    iconutil -c icns "$ROOT/build/Postline.iconset" -o "$ICNS"
+    rm -rf "$ROOT/build/Mailer.iconset"
+    swift "$ROOT/tools/make-icon.swift" "$ROOT/Resources/Icons/mail.svg" "$ROOT/build/Mailer.iconset"
+    iconutil -c icns "$ROOT/build/Mailer.iconset" -o "$ICNS"
 fi
-cp "$ICNS" "$APP/Contents/Resources/Postline.icns"
+cp "$ICNS" "$APP/Contents/Resources/Mailer.icns"
 
 # Your Google OAuth client ID (README → Google setup): from
-# POSTLINE_GOOGLE_CLIENT_ID, else GoogleClientID.txt next to this script.
+# MAILER_GOOGLE_CLIENT_ID, else GoogleClientID.txt next to this script.
 # It is kept out of the repository so every build signs in through its
 # builder's own Google project. Google redirects sign-in back to the reversed
 # client ID, so that is registered as a URL scheme too.
-CLIENT_ID="${POSTLINE_GOOGLE_CLIENT_ID:-}"
+CLIENT_ID="${MAILER_GOOGLE_CLIENT_ID:-}"
 if [ -z "$CLIENT_ID" ] && [ -f "$ROOT/GoogleClientID.txt" ]; then
     CLIENT_ID="$(tr -d '[:space:]' < "$ROOT/GoogleClientID.txt")"
 fi
 if [[ "$CLIENT_ID" == *.apps.googleusercontent.com ]]; then
     SCHEME="com.googleusercontent.apps.${CLIENT_ID%.apps.googleusercontent.com}"
-    /usr/libexec/PlistBuddy -c "Add :PostlineGoogleClientID string $CLIENT_ID" \
+    /usr/libexec/PlistBuddy -c "Add :MailerGoogleClientID string $CLIENT_ID" \
         -c "Add :CFBundleURLTypes array" \
         -c "Add :CFBundleURLTypes:0 dict" \
         -c "Add :CFBundleURLTypes:0:CFBundleURLName string $BUNDLE_ID.oauth" \
@@ -128,7 +130,7 @@ else
     IDENTITY="-"
     say "No signing certificate found — signing ad hoc (fine for your own Mac)"
 fi
-codesign --force --options runtime $TIMESTAMP --entitlements "$ROOT/Resources/Postline.entitlements" \
+codesign --force --options runtime $TIMESTAMP --entitlements "$ROOT/Resources/Mailer.entitlements" \
     --identifier "$BUNDLE_ID" --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"
 say "Built $APP"
@@ -139,7 +141,7 @@ case "$ACTION" in
         open "$APP" ;;
     demo)
         pkill -x Mailer 2>/dev/null || true; pkill -x Postline 2>/dev/null || true; sleep 0.5
-        POSTLINE_DEMO=1 "$APP/Contents/MacOS/Mailer" >/dev/null 2>&1 & ;;
+        MAILER_DEMO=1 "$APP/Contents/MacOS/Mailer" >/dev/null 2>&1 & ;;
     install)
         pkill -x Mailer 2>/dev/null || true; pkill -x Postline 2>/dev/null || true; sleep 0.5
         rm -rf /Applications/Postline.app /Applications/Mailer.app
@@ -148,7 +150,7 @@ case "$ACTION" in
         say "Installed to /Applications" ;;
     release)
         # Store notarization credentials once with
-        #   xcrun notarytool store-credentials postline --apple-id <you> \
+        #   xcrun notarytool store-credentials mailer --apple-id <you> \
         #         --team-id <TEAMID> --password <app-specific-password>
         # (or point NOTARY_PROFILE at an existing profile).
         DMG="$ROOT/build/Mailer.dmg"
@@ -160,7 +162,7 @@ case "$ACTION" in
         rm -rf "$STAGE"
         codesign --force --timestamp --sign "$IDENTITY" "$DMG"
         say "Notarizing (a few minutes)…"
-        xcrun notarytool submit "$DMG" --keychain-profile "${NOTARY_PROFILE:-postline}" --wait
+        xcrun notarytool submit "$DMG" --keychain-profile "${NOTARY_PROFILE:-mailer}" --wait
         xcrun stapler staple "$DMG"
         xcrun stapler validate "$DMG" && say "Notarized: $DMG" ;;
 esac

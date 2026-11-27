@@ -150,8 +150,11 @@ enum Mailbox: String, CaseIterable, Identifiable, Sendable {
     /// provider has said otherwise: Gmail's Promotions, Social and Forums.
     static let otherTags = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"]
 
+    /// `IS 1`, not `= 1`: with `= 1`, an unanswered message made the whole
+    /// test NULL, and `NOT NULL` is NULL too, so a Promotions email Gmail had
+    /// not answered for was in neither Inbox nor Other (2026-11-27).
     private static let primary = """
-    (primary_tab = 1 OR (primary_tab IS NULL AND NOT EXISTS (SELECT 1 FROM message_tags t \
+    (primary_tab IS 1 OR (primary_tab IS NULL AND NOT EXISTS (SELECT 1 FROM message_tags t \
     WHERE t.message_id = messages.id AND t.tag IN (\(otherTags.map { "'\($0)'" }.joined(separator: ","))))))
     """
 
@@ -162,7 +165,8 @@ enum Mailbox: String, CaseIterable, Identifiable, Sendable {
         // decides (its own `category:primary` search — it keeps most
         // Updates in Primary, not by label alone); `primary_tab` holds its
         // answer. Until it has answered for a new message, Promotions,
-        // Social and Forums are left out by tag (owner, 2026-11-13).
+        // Social and Forums are left out by tag (owner, 2026-11-13). The
+        // tags decide too when Gmail's answer is empty (Store.markPrimary).
         // Providers with no Primary tab leave `primary_tab` NULL and no
         // such tags, so their whole Inbox is here.
         case .inbox: "in_inbox = 1 AND \(Mailbox.primary)"

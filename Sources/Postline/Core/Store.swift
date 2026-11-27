@@ -313,6 +313,18 @@ final class Store: @unchecked Sendable {
     /// Records Gmail's Primary tab for an account: the listed messages
     /// (Gmail IDs) are Primary, every other Inbox message since `since` is not.
     func markPrimary(account: String, primary remoteIDs: Set<String>, since: Date) {
+        // An empty answer is no answer. Gmail's `category:primary` search
+        // found nothing on either of the owner's accounts, although 150 of
+        // their 400 Inbox messages carry the Primary label, and marking all
+        // 400 "not Primary" left the Inbox empty (2026-11-27). The messages go
+        // back to being sorted by their own category labels instead.
+        guard !remoteIDs.isEmpty else {
+            sync {
+                run("UPDATE messages SET primary_tab = NULL WHERE account=? AND in_inbox = 1 AND date >= ?",
+                    [account, since.timeIntervalSince1970])
+            }
+            return
+        }
         sync {
             run("""
             UPDATE messages SET primary_tab = CASE WHEN id IN (

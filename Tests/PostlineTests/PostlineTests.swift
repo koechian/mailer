@@ -199,6 +199,20 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(store.messages(in: .other, account: nil).map(\.id), [saved[1].id])
     }
 
+    func testEmptyPrimaryAnswerFallsBackToCategoryLabels() {
+        let store = Store(path: temporaryPath())
+        let saved = store.ingest([
+            fetched("p", labels: ["INBOX", "CATEGORY_PERSONAL"], subject: "From a person", body: ""),
+            fetched("o", labels: ["INBOX", "CATEGORY_PROMOTIONS"], subject: "Sale", body: "")
+        ])
+        store.markPrimary(account: "me@x.com", primary: ["o"], since: .distantPast)
+        XCTAssertEqual(store.messages(in: .inbox, account: nil).map(\.id), [saved[1].id])
+        // Gmail finds no Primary mail at all: its answer is set aside.
+        store.markPrimary(account: "me@x.com", primary: [], since: .distantPast)
+        XCTAssertEqual(store.messages(in: .inbox, account: nil).map(\.id), [saved[0].id])
+        XCTAssertEqual(store.messages(in: .other, account: nil).map(\.id), [saved[1].id])
+    }
+
     func testMigratesVersion1Database() throws {
         let path = temporaryPath()
         var db: OpaquePointer?

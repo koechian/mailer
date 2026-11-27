@@ -334,7 +334,7 @@ actor SyncEngine {
             let primaryIDs = Set((primary.messages ?? []).map(\.id))
             let since = (primary.messages?.count ?? 0) < 500
                 ? Date.distantPast
-                : local.filter { primaryIDs.contains($0.id) }.map(\.date).min() ?? Date()
+                : local.filter { remoteOf[$0.id].map(primaryIDs.contains) ?? false }.map(\.date).min() ?? Date()
             store.markPrimary(account: email, primary: primaryIDs, since: since)
             changed += 1   // always redraw: tabs may have moved
 

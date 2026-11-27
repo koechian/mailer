@@ -167,6 +167,7 @@ final class AppModel {
         } catch is CancellationError {
             return nil
         } catch {
+            Log.error("adding an account failed", error)
             self.error = error.localizedDescription
             return nil
         }
@@ -196,6 +197,7 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch {
+            Log.error("signing \(account.email) in again failed", error)
             self.error = error.localizedDescription
         }
     }
@@ -237,6 +239,7 @@ final class AppModel {
                     store.save(a)
                 }
             } catch {
+                Log.error("import for \(email) stopped", error)
                 self.error = "Import stopped: \(error.localizedDescription)"
             }
             importProgress[email] = nil
@@ -703,6 +706,7 @@ final class AppModel {
                 self.toast = Toast(text: "Sent")
                 await SyncEngine.shared.sync(draft.account)
             } catch {
+                Log.error("sending from \(draft.account) failed", error)
                 self.error = "Couldn't send: \(error.localizedDescription)"
                 self.composing = draft
             }
@@ -748,6 +752,7 @@ final class AppModel {
                 try data.write(to: url)
                 NSWorkspace.shared.open(url)
             } catch {
+                Log.error("opening an attachment failed", error)
                 self.error = "Couldn't open \(a.filename): \(error.localizedDescription)"
             }
         }

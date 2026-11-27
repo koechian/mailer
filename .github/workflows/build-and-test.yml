@@ -85,7 +85,20 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN"
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
+      # A published build's crashes need its debug symbols in GlitchTip.
+      # Uploaded only for releases, and only once the GLITCHTIP_AUTH_TOKEN
+      # and GLITCHTIP_URL secrets exist.
+      - name: Install sentry-cli for the debug symbols
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          GLITCHTIP_AUTH_TOKEN: ${{ secrets.GLITCHTIP_AUTH_TOKEN }}
+        run: |
+          if [ -n "$GLITCHTIP_AUTH_TOKEN" ]; then brew install getsentry/tools/sentry-cli; fi
+
       - name: Build the app bundle
+        env:
+          GLITCHTIP_AUTH_TOKEN: ${{ steps.signing.outputs.ready == 'true' && secrets.GLITCHTIP_AUTH_TOKEN || '' }}
+          GLITCHTIP_URL: ${{ secrets.GLITCHTIP_URL }}
         run: ./build.sh
 
       - name: Run the tests

@@ -183,7 +183,7 @@ actor Writer {
                 Log.write("writer qwen \(Int(Date().timeIntervalSince(started) * 1000)) ms")
                 return Self.stripThinking(text)
             } catch {
-                Log.write("writer qwen failed — \(error.localizedDescription); trying Apple's model")
+                Log.error("writer qwen failed; trying Apple's model", error)
                 return await apple(system: system, user: user)
             }
         case .apple:

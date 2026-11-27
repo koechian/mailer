@@ -92,6 +92,7 @@ struct ExportSheet: View {
             NSWorkspace.shared.activateFileViewerSelecting([saved])
             dismiss()
         } catch {
+            Log.error("saving an export failed", error)
             model.error = "Couldn't save the export: \(error.localizedDescription)"
         }
     }

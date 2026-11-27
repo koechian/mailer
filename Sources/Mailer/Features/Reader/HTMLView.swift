@@ -30,7 +30,7 @@ struct HTMLView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(height: $height, loadingImages: $loadingImages) }
 
     func makeNSView(context: Context) -> PassiveWebView {
-        let view = Performance.measure("reader.webview_create") {
+        let view = Performance.measure("reader.webview_create", parent: ReaderTiming.current) {
             let config = WKWebViewConfiguration()
             config.defaultWebpagePreferences.allowsContentJavaScript = false
             // No cookies, cache or storage shared between emails or kept on disk.
@@ -65,7 +65,7 @@ struct HTMLView: NSViewRepresentable {
         coordinator.loaded = pageKey
         let kilobytes = "\(html.utf8.count / 1024)"
         var removed = 0
-        let document = Performance.measure("reader.prepare_html", ["kb": kilobytes]) {
+        let document = Performance.measure("reader.prepare_html", ["kb": kilobytes], parent: ReaderTiming.current) {
             var page = html
             if allowsRemoteContent {
                 let stripped = TrackingImageFilter.strip(html)
@@ -199,7 +199,7 @@ struct HTMLView: NSViewRepresentable {
         private func reportReady() {
             guard !readyReported else { return }
             readyReported = true
-            if let pageLoad { Performance.record("reader.dom_ready", ms: pageLoad.elapsed, detail: pageDetail) }
+            if let pageLoad { Performance.record("reader.dom_ready", ms: pageLoad.elapsed, detail: pageDetail, parent: pageLoad) }
             onReady?()
         }
 

@@ -86,6 +86,9 @@ struct MailerApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
+            // First, so a crash while starting up is caught too.
+            Telemetry.rememberBuiltDSN()
+            Telemetry.apply(enabled: Preferences.shared.sendDiagnostics)
             NSApp.appearance = Preferences.shared.appearance.nsAppearance
             Config.rememberBuiltClientID()
             AppModel.shared.start()

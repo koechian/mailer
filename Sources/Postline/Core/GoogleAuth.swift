@@ -103,12 +103,20 @@ final class GoogleAuth {
             ])
             sessions[email] = Session(accessToken: t.accessToken,
                                       expiresAt: Date().addingTimeInterval(TimeInterval(t.expiresIn)))
-        } catch let error as PostlineError where error.message.contains("invalid_grant") {
-            // Revoked, or a Testing-mode project's 7-day expiry. Drop it so the
-            // account shows "Sign in again" instead of retrying forever.
+        } catch let error as PostlineError where Self.isSignedOut(error) {
+            // Revoked, or a Testing-mode project's 7-day expiry, or a token
+            // another Google project issued (the fork's first launch with
+            // its own project: every few seconds, both accounts, 2026-11-27).
+            // Drop it so the account shows "Sign in again" instead of
+            // retrying forever.
             Keychain.delete(Self.tokenKey(email))
             throw PostlineError("Google signed \(email) out. Sign in again from Settings.")
         }
+    }
+
+    /// Google's answers that mean the saved sign-in will never work again.
+    private static func isSignedOut(_ error: PostlineError) -> Bool {
+        error.message.contains("invalid_grant") || error.message.contains("unauthorized_client")
     }
 
     private func postToken(_ fields: [String: String]) async throws -> TokenResponse {

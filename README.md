@@ -14,10 +14,10 @@ your Mac, so opening, switching and searching never wait on the network.
   Everything else Gmail files in its Inbox sits under **Other**.
 - **Sign-in codes.** A code gets its own notification with the code as the title and a
   **Copy code** button. Click any notification to open that email.
-- **Out of the way.** No Dock icon and normally no menu bar icon. A menu bar icon appears
-  for 5 minutes when new Primary mail arrives (an envelope) or a code arrives (a key, gone
-  once you copy it). Closing or minimizing the window keeps Postline running; open it again
-  from Applications or Spotlight.
+- **Out of the way.** In the Dock like any other app, and normally no menu bar icon. A menu
+  bar icon appears for 5 minutes when new Primary mail arrives (an envelope) or a code arrives
+  (a key, gone once you copy it). Closing the window keeps Postline running; click its Dock
+  icon to open it again.
 - **Writing help, on your Mac only.** Three faint suggested replies under each email from a
   person, ghost text while you write (**Tab** or **→** takes it), and grammar fixes on
   sentences you've finished (⌘Z undoes). Suggestions never add a number (time, date,

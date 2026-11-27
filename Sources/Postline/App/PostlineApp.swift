@@ -56,10 +56,9 @@ struct PostlineApp: App {
             SettingsView(model: model)
         }
 
-        // Not there normally — Postline has no Dock icon and no menu bar icon
-        // (owner, 2026-11-14). It appears for five minutes when new Primary
-        // mail arrives (an envelope) or a sign-in code does (a key, until the
-        // code is copied), then leaves by itself.
+        // Not there normally (owner, 2026-11-14). It appears for five minutes
+        // when new Primary mail arrives (an envelope) or a sign-in code does
+        // (a key, until the code is copied), then leaves by itself.
         MenuBarExtra(isInserted: Binding(get: { model.menuIconVisible }, set: { inserted in
             // SwiftUI reports "not inserted" while setting the icon up; acting
             // on that when nothing is showing re-rendered forever (measured:
@@ -85,7 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             NSApp.appearance = Preferences.shared.appearance.nsAppearance
             AppModel.shared.start()
-            MinimizeHides.shared.install()
             // Started by "Open at login": run in the background, no window.
             let event = NSAppleEventManager.shared().currentAppleEvent
             if event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem {

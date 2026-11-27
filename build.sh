@@ -155,9 +155,8 @@ COMMIT="$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || true)"
 
 # The symbols go to GlitchTip when a token is at hand (GlitchTip → Profile →
 # Auth Tokens, with project:write), through sentry-cli, which GlitchTip
-# accepts. The server is GLITCHTIP_URL, else the DSN's; GLITCHTIP_ORG and
-# GLITCHTIP_PROJECT name the project. Published builds carry no DSN, so CI
-# sets GLITCHTIP_URL.
+# accepts. The server is the DSN's (or GLITCHTIP_URL); GLITCHTIP_ORG and
+# GLITCHTIP_PROJECT name the project.
 GLITCHTIP_URL="${GLITCHTIP_URL:-$(sed -nE 's#(https://)[^@]*@([^/]*)/.*#\1\2#p' <<<"$DSN")}"
 if [ -n "$GLITCHTIP_URL" ] && [ -n "${GLITCHTIP_AUTH_TOKEN:-}" ] && command -v sentry-cli >/dev/null; then
     say "Uploading debug symbols to GlitchTip…"

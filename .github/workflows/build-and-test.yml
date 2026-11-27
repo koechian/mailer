@@ -86,8 +86,8 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       # A published build's crashes need its debug symbols in GlitchTip.
-      # Uploaded only for releases, and only once the GLITCHTIP_AUTH_TOKEN
-      # and GLITCHTIP_URL secrets exist.
+      # Uploaded only for releases, and only while the GLITCHTIP_AUTH_TOKEN
+      # secret exists.
       - name: Install sentry-cli for the debug symbols
         if: steps.signing.outputs.ready == 'true'
         env:
@@ -95,10 +95,12 @@ jobs:
         run: |
           if [ -n "$GLITCHTIP_AUTH_TOKEN" ]; then brew install getsentry/tools/sentry-cli; fi
 
+      # The GlitchTip DSN is baked into every build, published ones included,
+      # so their Settings → Diagnostics switch can report (off by default).
       - name: Build the app bundle
         env:
+          MAILER_GLITCHTIP_DSN: ${{ secrets.MAILER_GLITCHTIP_DSN }}
           GLITCHTIP_AUTH_TOKEN: ${{ steps.signing.outputs.ready == 'true' && secrets.GLITCHTIP_AUTH_TOKEN || '' }}
-          GLITCHTIP_URL: ${{ secrets.GLITCHTIP_URL }}
         run: ./build.sh
 
       - name: Run the tests

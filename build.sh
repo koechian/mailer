@@ -46,8 +46,12 @@ for b in "$BIN_DIR"/*.bundle; do
     [ -d "$b" ] && ditto "$b" "$APP/Contents/Resources/$(basename "$b")"
 done
 METALLIB=""
+# A plain `swift build` does not compile Metal, so the last resort is a copy
+# kept at build/mlx/default.metallib (taken from an earlier app built with the
+# same MLX version, 2026-11-27).
 for candidate in "$BIN_DIR/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib" \
-                 "$BIN_DIR/mlx-swift_Cmlx.bundle/default.metallib"; do
+                 "$BIN_DIR/mlx-swift_Cmlx.bundle/default.metallib" \
+                 "$ROOT/build/mlx/default.metallib"; do
     [ -f "$candidate" ] && { METALLIB="$candidate"; break; }
 done
 if [ -n "$METALLIB" ]; then

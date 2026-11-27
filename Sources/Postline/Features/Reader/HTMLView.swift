@@ -16,33 +16,69 @@ struct HTMLView: NSViewRepresentable {
     let html: String
     var allowsRemoteContent = false
     @Binding var height: CGFloat
+    /// Called once the page is ready, for the reader's timing.
+    var onReady: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
 
     func makeNSView(context: Context) -> PassiveWebView {
-        let config = WKWebViewConfiguration()
-        config.defaultWebpagePreferences.allowsContentJavaScript = false
-        config.suppressesIncrementalRendering = true
-        // No cookies, cache or storage shared between emails or kept on disk.
-        config.websiteDataStore = .nonPersistent()
-        let view = PassiveWebView(frame: .zero, configuration: config)
+        let view = Performance.measure("reader.webview_create") {
+            let config = WKWebViewConfiguration()
+            config.defaultWebpagePreferences.allowsContentJavaScript = false
+            config.suppressesIncrementalRendering = true
+            // No cookies, cache or storage shared between emails or kept on disk.
+            config.websiteDataStore = .nonPersistent()
+            // Postline's own script, not the email's (those stay off): it
+            // reports when the text is laid out, before images finish, for
+            // the timing. It runs in its own world, where the email's page
+            // cannot reach it.
+            let controller = config.userContentController
+            controller.addUserScript(WKUserScript(source: Self.domReadyScript, injectionTime: .atDocumentEnd,
+                                                  forMainFrameOnly: true, in: .defaultClient))
+            controller.add(context.coordinator, contentWorld: .defaultClient, name: Self.timingChannel)
+            return PassiveWebView(frame: .zero, configuration: config)
+        }
         view.navigationDelegate = context.coordinator
         view.setValue(false, forKey: "drawsBackground")
+        context.coordinator.onReady = onReady
         load(view, context: context)
         return view
     }
 
     func updateNSView(_ view: PassiveWebView, context: Context) {
+        context.coordinator.onReady = onReady
         guard context.coordinator.loaded != pageKey else { return }
         load(view, context: context)
     }
 
+    static func dismantleNSView(_ view: PassiveWebView, coordinator: Coordinator) {
+        view.configuration.userContentController.removeScriptMessageHandler(forName: timingChannel, contentWorld: .defaultClient)
+    }
+
+    private static let timingChannel = "timing"
+    private static let domReadyScript =
+        "webkit.messageHandlers.\(timingChannel).postMessage(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))"
+
     private var pageKey: String { (allowsRemoteContent ? "remote:" : "local:") + html }
 
     private func load(_ view: PassiveWebView, context: Context) {
-        context.coordinator.loaded = pageKey
-        let page = allowsRemoteContent ? TrackingImageFilter.strip(html).html : html
-        view.loadHTMLString(Self.wrap(page, allowsRemoteContent: allowsRemoteContent), baseURL: nil)
+        let coordinator = context.coordinator
+        coordinator.loaded = pageKey
+        let kilobytes = "\(html.utf8.count / 1024)"
+        var removed = 0
+        let document = Performance.measure("reader.prepare_html", ["kb": kilobytes]) {
+            var page = html
+            if allowsRemoteContent {
+                let stripped = TrackingImageFilter.strip(html)
+                page = stripped.html
+                removed = stripped.removed
+            }
+            return Self.wrap(page, allowsRemoteContent: allowsRemoteContent)
+        }
+        coordinator.pageDetail = ["kb": kilobytes, "remote": allowsRemoteContent ? "on" : "off", "trackers": "\(removed)"]
+        coordinator.pageLoad = Performance.begin("reader.page_load")
+        coordinator.domReported = false
+        view.loadHTMLString(document, baseURL: nil)
     }
 
     /// The Content-Security-Policy for the page. Blocked: only inline styles
@@ -76,12 +112,36 @@ struct HTMLView: NSViewRepresentable {
         """
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         @Binding var height: CGFloat
         var loaded: String?
+        var onReady: (() -> Void)?
+        /// The page being loaded, for the timing.
+        var pageLoad: Performance.Interval?
+        var pageDetail: [String: String] = [:]
+        var domReported = false
         init(height: Binding<CGFloat>) { _height = height }
 
+        /// The text is laid out (DOMContentLoaded); images may still be
+        /// loading.
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard !domReported, let pageLoad else { return }
+            domReported = true
+            Performance.record("reader.dom_ready", ms: pageLoad.elapsed, detail: pageDetail)
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            finishTiming(["failed": "yes"])
+        }
+
+        private func finishTiming(_ extra: [String: String] = [:]) {
+            pageLoad?.end(pageDetail.merging(extra) { $1 })
+            pageLoad = nil
+            onReady?()
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            finishTiming()
             for delay in [0.0, 0.4, 1.2, 3.0] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak webView] in
                     webView?.evaluateJavaScript("Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)") { value, _ in

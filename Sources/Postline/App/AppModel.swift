@@ -276,6 +276,8 @@ final class AppModel {
     }
 
     func reload() {
+        let interval = Performance.begin("list.reload")
+        defer { interval.end(["mailbox": mailbox.rawValue, "search": searchText.isEmpty ? "no" : "yes"]) }
         let account = accountFilter
         for box in Mailbox.allCases {
             counts[box] = box == .inbox || box == .other
@@ -348,8 +350,10 @@ final class AppModel {
     }
 
     private func loadThread() {
-        thread = currentThread()
+        thread = Performance.measure("reader.thread_query") { currentThread() }
         guard let first = thread.last else { return }
+        ReaderTiming.began(threadID: first.threadID, messages: thread.count,
+                           withHTML: thread.filter { !($0.bodyHTML ?? "").isEmpty }.count)
         // A conversation that arrived as a lone reply: fetch the rest.
         if thread.count == 1, first.references != nil, !isDemo {
             Task { await SyncEngine.shared.completeThread(first.threadID, email: first.account) }

@@ -184,7 +184,8 @@ struct MessageBlock: View {
             if !allowsRemote, HTMLView.referencesRemoteContent(html) {
                 RemoteContentBar { remoteContentOnce = true }
             }
-            HTMLView(html: html, allowsRemoteContent: allowsRemote, height: $htmlHeight)
+            HTMLView(html: html, allowsRemoteContent: allowsRemote, height: $htmlHeight,
+                     onReady: { [threadID = message.threadID] in ReaderTiming.messageReady(threadID: threadID) })
                 .frame(height: htmlHeight)
                 .frame(maxWidth: .infinity)
                 .padding(paper ? 20 : 0)

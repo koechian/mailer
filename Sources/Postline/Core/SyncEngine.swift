@@ -100,7 +100,7 @@ actor SyncEngine {
         defer { running.remove(email) }
         repeat {
             rerun.remove(email)
-            do { try await syncOnce(email) }
+            do { try await Performance.measure("sync.history") { try await syncOnce(email) } }
             catch GmailError.rateLimited { pause(email); return }
             catch {
                 Log.write("sync \(email) failed — \(error.localizedDescription)")
@@ -289,6 +289,8 @@ actor SyncEngine {
     /// it runs at launch, on wake and every two minutes.
     func reconcile(_ email: String) async {
         if await isPaused(email) { return }
+        let interval = Performance.begin("sync.reconcile")
+        defer { interval.end() }
         let api = GmailAPI(email: email)
         do {
             let page = try await api.list(query: "in:inbox", pageToken: nil, max: 200)

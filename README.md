@@ -148,6 +148,41 @@ including what was measured and what was tried first.
 
 Logs go to `~/Library/Logs/Postline.log`.
 
+### Measuring performance
+
+The operations that have to stay fast are timed every time they run: opening an email
+(`reader.*`), listing a mailbox (`list.reload`) and syncing (`sync.*`). The timings stay on
+your Mac, in `~/Library/Logs/Postline-performance.jsonl`. To summarise them:
+
+```bash
+tools/performance_report.py --since 30          # last 30 minutes: median, p90, p99, worst
+tools/performance_report.py --op reader --by remote --slowest 10
+```
+
+| Timing | From → to |
+|---|---|
+| `reader.open` | clicking an email → every message in its thread shown |
+| `reader.thread_query` | reading the thread from the database |
+| `reader.prepare_html` | removing tracking pixels and wrapping the email's HTML |
+| `reader.webview_create` | creating the web view for one message |
+| `reader.dom_ready` | starting the page → its text laid out |
+| `reader.page_load` | starting the page → everything loaded, images included |
+| `list.reload` | redrawing the message list |
+| `sync.history`, `sync.reconcile` | one check with Gmail |
+
+To see *why* something is slow, record it in Instruments. The same timings appear as
+labelled intervals in the Points of Interest lane, above the CPU samples:
+
+```bash
+mkdir -p build/traces
+xcrun xctrace record --template 'Time Profiler' --attach Mailer --time-limit 30s \
+    --output build/traces/reader.trace     # use Mailer during the 30 s
+open build/traces/reader.trace
+```
+
+Each email is drawn in WebKit's own processes (`com.apple.WebKit.WebContent`), so for
+rendering work record with `--all-processes` instead of `--attach Mailer`.
+
 ## Keyboard
 
 **J/K** or the arrow keys move between conversations; **E** archives; **#** trashes; **R**,

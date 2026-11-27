@@ -99,6 +99,7 @@ struct SettingsView: View {
             .padding(28)
         }
         .frame(width: 560, height: 620)
+        .task { model.refreshSignedOut() }
         .background(Theme.panel)
         .sheet(item: $importFor) { account in ImportSheet(model: model, account: account) }
         .confirmationDialog("Remove \(removing?.email ?? "")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
@@ -119,11 +120,20 @@ struct SettingsView: View {
                 if let p = model.importProgress[a.email] {
                     Text(p.total == 0 ? "Finding older mail…" : "Importing \(p.done) of \(p.total)").font(.caption).foregroundStyle(Theme.accent)
                 }
+                if model.signedOut.contains(a.email) {
+                    Text("Signed out. Mail isn't syncing.").font(.caption).foregroundStyle(Theme.red)
+                }
             }
             Spacer()
-            Button("Import older mail") { importFor = a }
-                .buttonStyle(.plain).font(.calloutStrong).foregroundStyle(Theme.accent)
-                .disabled(model.importProgress[a.email] != nil)
+            if model.signedOut.contains(a.email) {
+                Button(model.addingAccount ? "Waiting for Google…" : "Sign in again") { Task { await model.signInAgain(a) } }
+                    .buttonStyle(.plain).font(.calloutStrong).foregroundStyle(Theme.accent)
+                    .disabled(model.addingAccount || !Config.isConfigured)
+            } else {
+                Button("Import older mail") { importFor = a }
+                    .buttonStyle(.plain).font(.calloutStrong).foregroundStyle(Theme.accent)
+                    .disabled(model.importProgress[a.email] != nil)
+            }
             IconButton(icon: .logout, help: "Remove account") { removing = a }
         }
         .padding(.horizontal, 12)

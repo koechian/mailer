@@ -32,7 +32,12 @@ actor SyncEngine {
     /// there).
     private var pausedUntil: [String: Date] = [:]
 
-    private func isPaused(_ email: String) -> Bool {
+    /// Paused when Gmail asked to slow down, and whenever the account has no
+    /// sign-in: without one every attempt fails, and the 5-second check
+    /// logged two failures every 5 s until it was signed in again
+    /// (2026-11-27).
+    private func isPaused(_ email: String) async -> Bool {
+        guard await GoogleAuth.shared.hasToken(for: email) else { return true }
         if let until = pausedUntil[email], until > Date() { return true }
         pausedUntil[email] = nil
         return false
@@ -89,7 +94,7 @@ actor SyncEngine {
     /// Applies everything Gmail changed since the account's cursor. Calls
     /// that arrive while one is running are folded into a single re-run.
     func sync(_ email: String) async {
-        if isPaused(email) { return }
+        if await isPaused(email) { return }
         if running.contains(email) { rerun.insert(email); return }
         running.insert(email)
         defer { running.remove(email) }
@@ -283,7 +288,7 @@ actor SyncEngine {
     /// Cheap — one list call, plus a label check only for what differs — so
     /// it runs at launch, on wake and every two minutes.
     func reconcile(_ email: String) async {
-        if isPaused(email) { return }
+        if await isPaused(email) { return }
         let api = GmailAPI(email: email)
         do {
             let page = try await api.list(query: "in:inbox", pageToken: nil, max: 200)
@@ -360,7 +365,7 @@ actor SyncEngine {
     /// Received: header: re-dates the Inbox, two requests at a time.
     private func redateOnce(_ email: String) async {
         let key = "redated.v1.\(email)"
-        guard !UserDefaults.standard.bool(forKey: key), !isPaused(email) else { return }
+        guard !UserDefaults.standard.bool(forKey: key), !(await isPaused(email)) else { return }
         let api = GmailAPI(email: email)
         var moved = 0
         do {

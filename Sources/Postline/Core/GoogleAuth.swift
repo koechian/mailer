@@ -29,10 +29,12 @@ final class GoogleAuth {
 
     // MARK: Public
 
-    func signIn() async throws -> GoogleProfile {
+    /// `hint` puts that address first on Google's account chooser, for
+    /// signing an existing account in again.
+    func signIn(hint: String? = nil) async throws -> GoogleProfile {
         guard Config.isConfigured else { throw PostlineError.notConfigured }
         let verifier = Self.makeCodeVerifier()
-        let code = try await authorize(challenge: Self.challenge(for: verifier))
+        let code = try await authorize(challenge: Self.challenge(for: verifier), hint: hint)
         let token = try await postToken([
             "client_id": Config.googleClientID,
             "code": code,
@@ -140,7 +142,7 @@ final class GoogleAuth {
 
     // MARK: Authorization
 
-    private func authorize(challenge: String) async throws -> String {
+    private func authorize(challenge: String, hint: String?) async throws -> String {
         var c = URLComponents(url: Config.authEndpoint, resolvingAgainstBaseURL: false)!
         c.queryItems = [
             .init(name: "client_id", value: Config.googleClientID),
@@ -154,6 +156,7 @@ final class GoogleAuth {
             .init(name: "prompt", value: "consent select_account"),
             .init(name: "include_granted_scopes", value: "true")
         ]
+        if let hint { c.queryItems?.append(.init(name: "login_hint", value: hint)) }
         let url = c.url!
         return try await withCheckedThrowingContinuation { cont in
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: Config.redirectScheme) { callback, error in

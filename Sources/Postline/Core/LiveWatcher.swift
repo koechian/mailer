@@ -32,10 +32,12 @@ actor LiveWatcher {
         while !Task.isCancelled {
             let client = IMAPClient(email: email)
             do {
+                // The token first: a signed-out account then waits without
+                // opening a connection to Gmail each time.
+                let token = try await GoogleAuth.shared.accessToken(for: email)
                 Log.write("live \(email): connecting")
                 try await client.connect()
                 Log.write("live \(email): connected, signing in")
-                let token = try await GoogleAuth.shared.accessToken(for: email)
                 do {
                     try await client.authenticate(accessToken: token)
                 } catch IMAPError.authFailed {

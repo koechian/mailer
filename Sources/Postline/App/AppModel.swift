@@ -56,6 +56,9 @@ final class AppModel {
     var codes: [FoundCode] = []
     var error: String?
     var addingAccount = false
+    /// Accounts with no Google sign-in (revoked, expired, or issued to
+    /// another Google project). Settings offers to sign them in again.
+    private(set) var signedOut: Set<String> = []
     /// The menu bar icon: shown for five minutes after new Primary mail or a
     /// code arrives, then gone. See `MenuIconClock`.
     private(set) var menuIcon = MenuIconClock()
@@ -164,6 +167,34 @@ final class AppModel {
         } catch {
             self.error = error.localizedDescription
             return nil
+        }
+    }
+
+    func refreshSignedOut() {
+        signedOut = Set(accounts.map(\.email).filter { !GoogleAuth.shared.hasToken(for: $0) })
+    }
+
+    /// Signs an existing account in again. Its mail and sync position stay,
+    /// so it catches up from where it stopped; nothing is imported.
+    func signInAgain(_ account: Account) async {
+        addingAccount = true
+        defer { addingAccount = false }
+        do {
+            let profile = try await GoogleAuth.shared.signIn(hint: account.email)
+            _ = try await SyncEngine.shared.connect(profile)
+            accounts = store.accounts()
+            refreshSignedOut()
+            // Its live connection may be waiting out a two-minute retry.
+            await SyncEngine.shared.stopLive(profile.email)
+            await SyncEngine.shared.startLive(for: accounts.map(\.email))
+            await SyncEngine.shared.sync(profile.email)
+            await SyncEngine.shared.reconcile(profile.email)
+            lastSync = Date()
+            reload()
+        } catch is CancellationError {
+            return
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

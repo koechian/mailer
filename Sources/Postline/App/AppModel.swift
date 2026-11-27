@@ -715,15 +715,31 @@ final class AppModel {
 
     // MARK: Attachments
 
+    /// An attachment's bytes, fetched from the provider.
+    func attachmentData(_ a: Attachment, of m: Message) async throws -> Data {
+        if isDemo { return Data("Demo attachment".utf8) }
+        guard let aid = a.attachmentID, let remoteID = store.remoteID(for: m.id) else {
+            throw PostlineError("\(a.filename) can't be downloaded.")
+        }
+        return try await GmailAPI(email: m.account).attachment(messageID: remoteID, attachmentID: aid)
+    }
+
+    // MARK: Export for AI
+
+    /// Shows the Export for AI sheet for the open thread.
+    var exportingThread = false
+
+    /// The open thread, ready to export; the owner's addresses (every
+    /// account and send-as address) are marked "(me)".
+    func threadExport() -> ThreadExport {
+        let me = Set(accounts.flatMap { [$0.email] + $0.sendAs.map(\.email) }.map { $0.lowercased() })
+        return ThreadExport(thread: thread, me: me)
+    }
+
     func openAttachment(_ a: Attachment, of m: Message) {
         Task {
             do {
-                let data: Data
-                if isDemo { data = Data("Demo attachment".utf8) }
-                else if let aid = a.attachmentID, let remoteID = store.remoteID(for: m.id) {
-                    data = try await GmailAPI(email: m.account).attachment(messageID: remoteID, attachmentID: aid)
-                }
-                else { return }
+                let data = try await attachmentData(a, of: m)
                 let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Postline/\(m.id)", isDirectory: true)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 let url = dir.appendingPathComponent(a.filename.isEmpty ? "attachment" : a.filename)

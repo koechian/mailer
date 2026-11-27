@@ -45,6 +45,10 @@ struct PostlineApp: App {
                 Button("Move to Trash") { model.trash() }.keyboardShortcut(.delete, modifiers: .command)
                 Button("Mark as Read/Unread") { model.toggleUnread() }.keyboardShortcut("u", modifiers: [.command, .shift])
                 Button("Pin") { model.togglePin() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Divider()
+                Button("Export for AI…") { model.exportingThread = true }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(model.thread.isEmpty)
             }
         }
 

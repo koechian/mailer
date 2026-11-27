@@ -43,6 +43,7 @@ struct ReaderView: View {
                 }
             }
             .onChange(of: last.threadID) { _, _ in expanded = [] }
+            .sheet(isPresented: $model.exportingThread) { ExportSheet(model: model) }
         } else {
             EmptyReader(model: model)
         }
@@ -76,6 +77,7 @@ struct ActionBar: View {
                         NSWorkspace.shared.open(url)
                     }
                 }
+                Button("Export for AI…") { model.exportingThread = true }
                 Divider()
                 Button("Copy sender's address") {
                     NSPasteboard.general.clearContents()

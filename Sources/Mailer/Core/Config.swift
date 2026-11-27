@@ -16,17 +16,43 @@ enum Config {
     /// existing sign-ins are kept under it.
     static let bundleID = "com.oiharshit.postline"
 
-    /// Google Cloud → your project → APIs & Services → Credentials → Create
-    /// OAuth client ID → Application type **iOS**, Bundle ID
-    /// `com.oiharshit.postline`. Put the client ID in `GoogleClientID.txt`
-    /// next to `build.sh` (or `MAILER_GOOGLE_CLIENT_ID`); `build.sh` writes
-    /// it and the matching URL scheme into Info.plist. See README → Google setup.
-    static let googleClientID = (Bundle.main.object(forInfoDictionaryKey: "MailerGoogleClientID") as? String)
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .flatMap { $0.isEmpty ? nil : $0 } ?? "REPLACE_ME"
+    /// The Google OAuth client ID (Google Cloud → your project → Clients →
+    /// type **iOS**, Bundle ID `com.oiharshit.postline`; README → Google
+    /// setup). A build from `build.sh` carries it, from `GoogleClientID.txt`
+    /// or `MAILER_GOOGLE_CLIENT_ID`, and it is then kept on this Mac. Builds
+    /// published on GitHub carry none, so that nobody who downloads one signs
+    /// in through someone else's Google project: they use the one kept on
+    /// this Mac, or ask for one during onboarding.
+    static var googleClientID: String {
+        builtClientID ?? UserDefaults.standard.string(forKey: clientIDKey) ?? "REPLACE_ME"
+    }
 
-    static var isConfigured: Bool {
-        !googleClientID.hasPrefix("REPLACE_ME") && googleClientID.hasSuffix(".apps.googleusercontent.com")
+    static var isConfigured: Bool { isValidClientID(googleClientID) }
+
+    static func isValidClientID(_ id: String) -> Bool {
+        id.hasSuffix(".apps.googleusercontent.com") && !id.contains(where: \.isWhitespace) && id.count > 30
+    }
+
+    private static let clientIDKey = "googleClientID"
+
+    private static let builtClientID = (Bundle.main.object(forInfoDictionaryKey: "MailerGoogleClientID") as? String)
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .flatMap { isValidClientID($0) ? $0 : nil }
+
+    /// Keeps the client ID this build carries on this Mac, so the published
+    /// updates that replace it, which carry none, still sign in.
+    static func rememberBuiltClientID() {
+        guard let builtClientID else { return }
+        UserDefaults.standard.set(builtClientID, forKey: clientIDKey)
+    }
+
+    /// Saves a client ID pasted during onboarding. False if it isn't one.
+    @discardableResult
+    static func saveClientID(_ id: String) -> Bool {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isValidClientID(trimmed) else { return false }
+        UserDefaults.standard.set(trimmed, forKey: clientIDKey)
+        return true
     }
 
     /// `https://mail.google.com/` is the one scope that covers both the Gmail

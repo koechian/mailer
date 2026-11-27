@@ -4,7 +4,8 @@ import Foundation
 /// and HTML bodies, attachments, the Spark-style category and the DMARC tick.
 enum MessageParser {
 
-    static func parse(_ raw: GmailAPI.RawMessage, account: String) -> Message {
+    /// The message as fetched; the store gives it its local ID.
+    static func parse(_ raw: GmailAPI.RawMessage, account: String) -> FetchedMessage {
         let payload = raw.payload
         let headers = Dictionary((payload?.headers ?? []).map { ($0.name.lowercased(), $0.value) },
                                  uniquingKeysWith: { first, _ in first })
@@ -18,20 +19,24 @@ enum MessageParser {
         let labels = Set(raw.labelIds ?? [])
         let bodyText = text ?? html.map(htmlToText) ?? ""
         let subject = headers["subject"].map(decodeEncodedWords) ?? ""
+        let to = addressList(headers["to"])
 
         let category = classify(labels: labels, headers: headers, subject: subject,
                                 hasCalendar: attachments.contains { $0.mimeType.hasPrefix("text/calendar") || $0.filename.hasSuffix(".ics") })
 
-        return Message(
-            id: raw.id, account: account, threadID: raw.threadId, date: date,
+        let message = Message(
+            id: "", account: account, threadID: raw.threadId, date: date,
             fromName: decodeEncodedWords(fromName), fromEmail: fromEmail.lowercased(),
-            to: addressList(headers["to"]), cc: addressList(headers["cc"]),
+            to: to, cc: addressList(headers["cc"]),
             replyTo: headers["reply-to"].map { splitAddress($0).1 },
             subject: subject, snippet: decodeEntities(raw.snippet ?? ""),
-            bodyText: bodyText, bodyHTML: html, labels: labels, attachments: attachments,
+            bodyText: bodyText, bodyHTML: html,
+            state: GmailMapping.state(labels: labels, to: to, account: account),
+            attachments: attachments,
             category: category, verified: dmarcPassed(headers["authentication-results"], from: fromEmail),
             messageIDHeader: headers["message-id"], references: headers["references"],
             listUnsubscribe: headers["list-unsubscribe"])
+        return FetchedMessage(remoteID: raw.id, message: message)
     }
 
     // MARK: Parts

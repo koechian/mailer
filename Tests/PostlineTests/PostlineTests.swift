@@ -1,5 +1,6 @@
 import XCTest
 import OTPCore
+import SQLite3
 @testable import Postline
 
 final class OTPTests: XCTestCase {
@@ -52,7 +53,7 @@ final class ParserTests: XCTestCase {
         let m = MessageParser.parse(try raw(headers: [
             ("From", "\"Rico O.\" <Rico@Figma.com>"), ("To", "Harshit <h@x.com>, \"Doe, Jane\" <jane@x.com>"),
             ("Subject", "=?UTF-8?B?8J+OiSBXZWxjb21l?="), ("Authentication-Results", "mx.google.com; dkim=pass; spf=pass; dmarc=pass (p=REJECT)")
-        ], labels: ["INBOX", "UNREAD", "CATEGORY_PERSONAL"], html: "<p>Hi</p>", attachment: true), account: "me@x.com")
+        ], labels: ["INBOX", "UNREAD", "CATEGORY_PERSONAL"], html: "<p>Hi</p>", attachment: true), account: "me@x.com").message
         XCTAssertEqual(m.fromName, "Rico O.")
         XCTAssertEqual(m.fromEmail, "rico@figma.com")
         XCTAssertEqual(m.to.count, 2, "a comma inside quotes must not split an address")
@@ -68,15 +69,15 @@ final class ParserTests: XCTestCase {
     }
 
     func testBuckets() throws {
-        let promo = MessageParser.parse(try raw(headers: [("From", "Shop <deals@shop.com>"), ("Subject", "Sale")], labels: ["INBOX", "CATEGORY_PROMOTIONS"]), account: "a")
+        let promo = MessageParser.parse(try raw(headers: [("From", "Shop <deals@shop.com>"), ("Subject", "Sale")], labels: ["INBOX", "CATEGORY_PROMOTIONS"]), account: "a").message
         XCTAssertEqual(promo.category, .newsletters)
-        let update = MessageParser.parse(try raw(headers: [("From", "GitHub <noreply@github.com>"), ("Subject", "Build passed")], labels: ["INBOX", "CATEGORY_UPDATES"]), account: "a")
+        let update = MessageParser.parse(try raw(headers: [("From", "GitHub <noreply@github.com>"), ("Subject", "Build passed")], labels: ["INBOX", "CATEGORY_UPDATES"]), account: "a").message
         XCTAssertEqual(update.category, .notifications)
-        let list = MessageParser.parse(try raw(headers: [("From", "Substack <read@substack.com>"), ("Subject", "Weekly"), ("List-Unsubscribe", "<https://x>")], labels: ["INBOX"]), account: "a")
+        let list = MessageParser.parse(try raw(headers: [("From", "Substack <read@substack.com>"), ("Subject", "Weekly"), ("List-Unsubscribe", "<https://x>")], labels: ["INBOX"]), account: "a").message
         XCTAssertEqual(list.category, .newsletters)
-        let invite = MessageParser.parse(try raw(headers: [("From", "Cal <a@cal.com>"), ("Subject", "Invitation: Review @ Thu")], labels: ["INBOX"]), account: "a")
+        let invite = MessageParser.parse(try raw(headers: [("From", "Cal <a@cal.com>"), ("Subject", "Invitation: Review @ Thu")], labels: ["INBOX"]), account: "a").message
         XCTAssertEqual(invite.category, .invitations)
-        let person = MessageParser.parse(try raw(headers: [("From", "Sam <sam@example.com>"), ("Subject", "Dinner?")], labels: ["INBOX"]), account: "a")
+        let person = MessageParser.parse(try raw(headers: [("From", "Sam <sam@example.com>"), ("Subject", "Dinner?")], labels: ["INBOX"]), account: "a").message
         XCTAssertEqual(person.category, .people)
         XCTAssertFalse(person.verified)
     }
@@ -92,47 +93,69 @@ final class ParserTests: XCTestCase {
 
     func testHTMLOnlyMailGetsSearchableText() throws {
         let m = MessageParser.parse(try raw(headers: [("From", "x@y.com")], labels: ["INBOX"], text: nil,
-                                            html: "<style>p{}</style><p>Your code&nbsp;is</p><b>123</b>"), account: "a")
+                                            html: "<style>p{}</style><p>Your code&nbsp;is</p><b>123</b>"), account: "a").message
         XCTAssertEqual(m.bodyText, "Your code is\n 123")
     }
 }
 
 final class StoreTests: XCTestCase {
-    private func message(_ id: String, labels: Set<String>, subject: String, body: String, minutesAgo: Double = 1, thread: String? = nil) -> Message {
-        Message(id: id, account: "me@x.com", threadID: thread ?? id, date: Date().addingTimeInterval(-minutesAgo * 60),
-                fromName: "Rico", fromEmail: "rico@figma.com", to: [], cc: [], replyTo: nil, subject: subject,
-                snippet: body, bodyText: body, bodyHTML: nil, labels: labels, attachments: [], category: .people,
-                verified: true, messageIDHeader: nil, references: nil, listUnsubscribe: nil)
+    private func fetched(_ id: String, labels: Set<String>, subject: String, body: String, minutesAgo: Double = 1,
+                         thread: String? = nil, to: [String] = []) -> FetchedMessage {
+        FetchedMessage(remoteID: id, message: Message(
+            id: "", account: "me@x.com", threadID: thread ?? id, date: Date().addingTimeInterval(-minutesAgo * 60),
+            fromName: "Rico", fromEmail: "rico@figma.com", to: to, cc: [], replyTo: nil, subject: subject,
+            snippet: body, bodyText: body, bodyHTML: nil,
+            state: GmailMapping.state(labels: labels, to: to, account: "me@x.com"), attachments: [], category: .people,
+            verified: true, messageIDHeader: nil, references: nil, listUnsubscribe: nil))
     }
 
-    func testMailboxesSearchAndLabels() throws {
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent("postline-test-\(UUID()).sqlite").path
-        let store = Store(path: path)
+    private func temporaryPath() -> String {
+        FileManager.default.temporaryDirectory.appendingPathComponent("postline-test-\(UUID()).sqlite").path
+    }
+
+    /// Provider IDs of a list of messages, for readable assertions.
+    private func remote(_ messages: [Message], _ store: Store) -> [String] {
+        let map = store.remoteIDs(for: messages.map(\.id))
+        return messages.map { map[$0.id] ?? "?" }
+    }
+
+    func testMailboxesSearchAndState() throws {
+        let store = Store(path: temporaryPath())
         store.save(Account(email: "me@x.com", name: "Me", pictureURL: nil, historyID: "42", sendAs: [SendAs(email: "hello@me.com", name: "Me", isDefault: true)]))
         XCTAssertEqual(store.accounts().first?.sendAs.first?.email, "hello@me.com")
 
-        store.upsert([
-            message("a", labels: ["INBOX", "UNREAD"], subject: "Invoice for October", body: "Please find the invoice attached"),
-            message("b", labels: ["SENT"], subject: "Re: Invoice", body: "Thanks!", minutesAgo: 2, thread: "a"),
-            message("c", labels: ["TRASH"], subject: "Old invoice", body: "gone")
+        let saved = store.ingest([
+            fetched("a", labels: ["INBOX", "UNREAD", "CATEGORY_PERSONAL"], subject: "Invoice for October", body: "Please find the invoice attached"),
+            fetched("b", labels: ["SENT"], subject: "Re: Invoice", body: "Thanks!", minutesAgo: 2, thread: "a"),
+            fetched("c", labels: ["TRASH"], subject: "Old invoice", body: "gone")
         ])
-        XCTAssertEqual(store.messages(in: .inbox, account: nil).map(\.id), ["a"])
-        XCTAssertEqual(store.messages(in: .sent, account: nil).map(\.id), ["b"])
-        XCTAssertEqual(store.messages(in: .trash, account: nil).map(\.id), ["c"])
+        XCTAssertEqual(remote(store.messages(in: .inbox, account: nil), store), ["a"])
+        XCTAssertEqual(remote(store.messages(in: .sent, account: nil), store), ["b"])
+        XCTAssertEqual(remote(store.messages(in: .trash, account: nil), store), ["c"])
         XCTAssertEqual(store.count(in: .inbox, account: nil, unreadOnly: true), 1)
-        XCTAssertEqual(store.thread("a", account: "me@x.com").map(\.id), ["b", "a"])
+        XCTAssertEqual(remote(store.thread("a", account: "me@x.com"), store), ["b", "a"])
+
+        // Lists carry no bodies; a conversation does. Tags come back with both.
+        let listed = try XCTUnwrap(store.messages(in: .inbox, account: nil).first)
+        XCTAssertEqual(listed.bodyText, "")
+        XCTAssertEqual(listed.state.tags, ["CATEGORY_PERSONAL"])
+        XCTAssertEqual(store.thread("a", account: "me@x.com").last?.bodyText, "Please find the invoice attached")
 
         // Prefix search, and Trash stays out of results.
-        XCTAssertEqual(Set(store.search("invo", account: nil).map(\.id)), ["a", "b"])
+        XCTAssertEqual(Set(remote(store.search("invo", account: nil), store)), ["a", "b"])
         XCTAssertEqual(store.search("figma", account: nil).count, 2, "sender address is searchable")
 
-        // Archive: the label goes, the mail moves.
-        store.setLabels("a", ["UNREAD"])
+        // Archive: the role goes, the mail moves, the tags stay.
+        let a = saved[0]
+        var archived = a.state
+        archived.roles = [.archive]
+        store.setState(a.id, archived)
         XCTAssertTrue(store.messages(in: .inbox, account: nil).isEmpty)
-        XCTAssertEqual(store.messages(in: .archive, account: nil).map(\.id), ["a"])
+        XCTAssertEqual(store.messages(in: .archive, account: nil).map(\.id), [a.id])
+        XCTAssertEqual(store.message(a.id)?.state.tags, ["CATEGORY_PERSONAL"])
 
         // Speed: 2,000 messages written, then a mailbox and a search read.
-        store.upsert((0..<2000).map { message("bulk\($0)", labels: ["INBOX"], subject: "Weekly digest \($0)", body: String(repeating: "lorem ipsum ", count: 80), minutesAgo: Double($0)) })
+        store.ingest((0..<2000).map { fetched("bulk\($0)", labels: ["INBOX"], subject: "Weekly digest \($0)", body: String(repeating: "lorem ipsum ", count: 80), minutesAgo: Double($0)) })
         let t0 = Date()
         let inbox = store.messages(in: .inbox, account: nil)
         let t1 = Date()
@@ -144,13 +167,115 @@ final class StoreTests: XCTestCase {
         XCTAssertLessThan(t1.timeIntervalSince(t0), 0.25)
         XCTAssertLessThan(t2.timeIntervalSince(t1), 0.25)
     }
+
+    func testLocalIDsStayWhenAMessageIsFetchedAgain() throws {
+        let store = Store(path: temporaryPath())
+        let first = store.ingest([fetched("g1", labels: ["INBOX", "UNREAD"], subject: "Hello", body: "one")])[0]
+        XCTAssertNotEqual(first.id, "g1", "the local ID is Postline's own")
+        XCTAssertEqual(store.localID(account: "me@x.com", remoteID: "g1"), first.id)
+        XCTAssertEqual(store.remoteID(for: first.id), "g1")
+
+        let again = store.ingest([fetched("g1", labels: ["INBOX"], subject: "Hello again", body: "two")])[0]
+        XCTAssertEqual(again.id, first.id)
+        XCTAssertEqual(store.message(first.id)?.subject, "Hello again")
+        XCTAssertEqual(store.search("again", account: nil).map(\.id), [first.id], "the search entry is replaced, not duplicated")
+        XCTAssertTrue(store.search("one", account: nil).isEmpty)
+
+        store.delete(ids: [first.id])
+        XCTAssertNil(store.message(first.id))
+        XCTAssertNil(store.localID(account: "me@x.com", remoteID: "g1"))
+        XCTAssertTrue(store.search("again", account: nil).isEmpty)
+    }
+
+    func testPrimaryTabByGmailIDs() {
+        let store = Store(path: temporaryPath())
+        let saved = store.ingest([
+            fetched("p", labels: ["INBOX", "CATEGORY_UPDATES"], subject: "Kept in Primary", body: ""),
+            fetched("o", labels: ["INBOX", "CATEGORY_UPDATES"], subject: "Not Primary", body: "")
+        ])
+        XCTAssertEqual(store.messages(in: .inbox, account: nil).count, 2, "until Gmail answers, Updates count as Primary")
+        store.markPrimary(account: "me@x.com", primary: ["p"], since: .distantPast)
+        XCTAssertEqual(store.messages(in: .inbox, account: nil).map(\.id), [saved[0].id])
+        XCTAssertEqual(store.messages(in: .other, account: nil).map(\.id), [saved[1].id])
+    }
+
+    func testMigratesVersion1Database() throws {
+        let path = temporaryPath()
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &db), SQLITE_OK)
+        let v1 = """
+        CREATE TABLE accounts(email TEXT PRIMARY KEY, name TEXT, picture TEXT, history_id TEXT,
+            imported_since REAL, send_as TEXT, position INTEGER DEFAULT 0);
+        CREATE TABLE messages(id TEXT PRIMARY KEY, account TEXT NOT NULL, thread_id TEXT NOT NULL,
+            date REAL NOT NULL, from_name TEXT, from_email TEXT, to_list TEXT, cc_list TEXT,
+            reply_to TEXT, subject TEXT, snippet TEXT, body_text TEXT, body_html TEXT,
+            labels TEXT NOT NULL, attachments TEXT, category TEXT NOT NULL,
+            verified INTEGER NOT NULL DEFAULT 0, message_id_header TEXT, refs TEXT,
+            list_unsubscribe TEXT, primary_tab INTEGER);
+        CREATE INDEX messages_date ON messages(date DESC);
+        CREATE INDEX messages_thread ON messages(account, thread_id);
+        CREATE VIRTUAL TABLE messages_fts USING fts5(id UNINDEXED, subject, sender, body);
+        CREATE TABLE codes(message_id TEXT PRIMARY KEY, code TEXT, sender TEXT, account TEXT, date REAL);
+        INSERT INTO accounts(email, name, history_id) VALUES('me@x.com', 'Me', '99');
+        INSERT INTO messages VALUES('m1', 'me@x.com', 't1', 1700000000, 'Rico', 'rico@figma.com', 'me@x.com', '',
+            NULL, 'Quarterly report', 'snip', 'The report is attached', '<p>Report</p>',
+            ' CATEGORY_UPDATES INBOX STARRED UNREAD ', '[]', 'people', 1, '<m1@x>', NULL, NULL, 1);
+        INSERT INTO messages VALUES('m2', 'me@x.com', 't2', 1700000100, 'Me', 'me@x.com', 'ana@x.com', '',
+            NULL, 'Sent note', 'snip', 'Hi Ana', NULL, ' SENT ', '[]', 'people', 0, NULL, NULL, NULL, NULL);
+        INSERT INTO messages VALUES('m3', 'me@x.com', 't3', 1700000200, 'Bo', 'bo@x.com', 'me@x.com', '',
+            NULL, 'Old thing', 'snip', 'archived body', NULL, ' Label_7 ', '[]', 'people', 0, NULL, NULL, NULL, NULL);
+        """
+        XCTAssertEqual(sqlite3_exec(db, v1, nil, nil, nil), SQLITE_OK)
+        sqlite3_close(db)
+
+        let store = Store(path: path)
+        XCTAssertEqual(store.accounts().first?.historyID, "99")
+        let m1 = try XCTUnwrap(store.message("m1"), "a migrated message keeps its ID")
+        XCTAssertEqual(m1.state, MailState(roles: [.inbox], isUnread: true, isFlagged: true, tags: ["CATEGORY_UPDATES"]))
+        XCTAssertEqual(m1.bodyText, "The report is attached")
+        XCTAssertEqual(m1.bodyHTML, "<p>Report</p>")
+        XCTAssertEqual(store.remoteID(for: "m1"), "m1")
+        XCTAssertEqual(store.messages(in: .inbox, account: nil).map(\.id), ["m1"], "Gmail's Primary answer is kept")
+        XCTAssertEqual(store.messages(in: .sent, account: nil).map(\.id), ["m2"])
+        XCTAssertEqual(store.messages(in: .archive, account: nil).map(\.id), ["m3"], "sent mail to others is not archived")
+        XCTAssertEqual(store.message("m3")?.state.tags, ["Label_7"])
+        XCTAssertEqual(store.search("report", account: nil).map(\.id), ["m1"])
+        XCTAssertEqual(store.search("archived", account: nil).map(\.id), ["m3"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: (path as NSString).deletingPathExtension + "-v1-backup.sqlite"))
+
+        // Opening it again changes nothing.
+        let reopened = Store(path: path)
+        XCTAssertEqual(reopened.messages(in: .inbox, account: nil).map(\.id), ["m1"])
+    }
+}
+
+final class GmailMappingTests: XCTestCase {
+    func testLabelsBecomeRolesFlagsAndTags() {
+        let s = GmailMapping.state(labels: ["INBOX", "UNREAD", "STARRED", "IMPORTANT", "Label_3"], to: [], account: "me@x.com")
+        XCTAssertEqual(s, MailState(roles: [.inbox], isUnread: true, isFlagged: true, tags: ["IMPORTANT", "Label_3"]))
+        XCTAssertEqual(GmailMapping.labels(for: s), ["INBOX", "UNREAD", "STARRED", "IMPORTANT", "Label_3"])
+    }
+
+    func testArchiveIsTheAbsenceOfInbox() {
+        XCTAssertEqual(GmailMapping.state(labels: [], to: [], account: "me@x.com").roles, [.archive])
+        XCTAssertEqual(GmailMapping.state(labels: ["TRASH"], to: [], account: "me@x.com").roles, [.trash])
+        XCTAssertEqual(GmailMapping.state(labels: ["SENT"], to: ["ana@x.com"], account: "me@x.com").roles, [.sent])
+        XCTAssertEqual(GmailMapping.state(labels: ["SENT"], to: ["Me <ME@x.com>"], account: "me@x.com").roles, [.sent, .archive],
+                       "mail sent to yourself and archived stays findable")
+        XCTAssertFalse(GmailMapping.labels(for: MailState(roles: [.archive])).contains("ARCHIVE"))
+    }
+
+    func testNormalisingDropsArchiveFromSentMail() {
+        let archivedSent = MailState(roles: [.sent, .archive])
+        XCTAssertEqual(GmailMapping.normalised(archivedSent, to: ["ana@x.com"], account: "me@x.com").roles, [.sent])
+    }
 }
 
 final class OutgoingTests: XCTestCase {
     func testMIMEForReplyFromAlias() throws {
         let original = Message(id: "m", account: "me@gmail.com", threadID: "t", date: Date(), fromName: "Rico", fromEmail: "rico@figma.com",
                                to: ["Harshit <hello@example.com>"], cc: ["Ana <ana@figma.com>"], replyTo: nil, subject: "Feedback",
-                               snippet: "", bodyText: "Line one\nLine two", bodyHTML: nil, labels: ["INBOX"], attachments: [],
+                               snippet: "", bodyText: "Line one\nLine two", bodyHTML: nil, state: MailState(roles: [.inbox]), attachments: [],
                                category: .people, verified: true, messageIDHeader: "<abc@figma.com>", references: "<root@figma.com>", listUnsubscribe: nil)
         let account = Account(email: "me@gmail.com", name: "Harshit", pictureURL: nil, historyID: nil,
                               sendAs: [SendAs(email: "me@gmail.com", name: "Harshit", isDefault: false),

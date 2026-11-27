@@ -20,17 +20,19 @@ enum DemoData {
         func m(_ account: String = "hello@postline.test", from: String, _ email: String, _ subject: String, _ body: String,
                at date: Date, labels: Set<String> = ["INBOX", "UNREAD"], category: MailCategory = .people,
                verified: Bool = true, thread: String? = nil, html: String? = nil, files: [Attachment] = [],
-               to: [String] = ["Harshit <hello@postline.test>"]) -> Message {
+               to: [String] = ["Harshit <hello@postline.test>"]) -> FetchedMessage {
             n += 1
-            return Message(id: "demo\(n)", account: account, threadID: thread ?? "t\(n)", date: date, fromName: from, fromEmail: email,
+            let message = Message(id: "", account: account, threadID: thread ?? "t\(n)", date: date, fromName: from, fromEmail: email,
                            to: to, cc: [], replyTo: nil, subject: subject,
                            snippet: String(body.replacingOccurrences(of: "\n", with: " ").prefix(140)), bodyText: body,
-                           bodyHTML: html, labels: labels, attachments: files, category: category, verified: verified,
+                           bodyHTML: html, state: GmailMapping.state(labels: labels, to: to, account: account),
+                           attachments: files, category: category, verified: verified,
                            messageIDHeader: "<demo\(n)@postline.test>", references: thread == nil ? nil : "<demo1@postline.test>",
                            listUnsubscribe: category == .newsletters ? "<https://example.com/unsubscribe>" : nil)
+            return FetchedMessage(remoteID: "demo\(n)", message: message)
         }
 
-        let messages: [Message] = [
+        let messages: [FetchedMessage] = [
             m(from: "Rico Oktananda", "rico@figma.com", "We need your UX feedback!",
               "Hi Harshit,\n\nWe're refining our product and need your insights on our user experience design. Please share any additional feedback you have — your perspective is crucial in helping us exceed user expectations.\n\nBest regards,\nRico",
               at: ago(9), files: [
@@ -76,7 +78,9 @@ enum DemoData {
               "Hi Harshit, introducing you to Maya who is building a fintech app and needs a design partner.",
               at: ago(5000), labels: ["INBOX", "UNREAD"])
         ]
-        store.upsert(messages)
-        store.saveCode(FoundCode(code: "482913", sender: "Google", messageID: "demo3", account: "hello@postline.test", date: ago(3)))
+        store.ingest(messages)
+        if let code = store.localID(account: "hello@postline.test", remoteID: "demo3") {
+            store.saveCode(FoundCode(code: "482913", sender: "Google", messageID: code, account: "hello@postline.test", date: ago(3)))
+        }
     }
 }

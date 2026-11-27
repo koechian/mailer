@@ -132,7 +132,7 @@ struct MessageList: View {
         Button("Forward") { model.selection = m.id; model.forward() }
         Divider()
         Button(m.isUnread ? "Mark as read" : "Mark as unread") { model.selection = m.id; model.toggleUnread() }
-        Button(m.isStarred ? "Unpin" : "Pin") { model.selection = m.id; model.togglePin() }
+        Button(m.isFlagged ? "Unpin" : "Pin") { model.selection = m.id; model.togglePin() }
         Button("Archive") { model.swipeArchive(m) }
         Button("Move to Trash") { model.swipeTrash(m) }
         Divider()
@@ -227,7 +227,7 @@ struct ThreadRow: View {
     }
 
     /// In Sent, the row is about who it went to.
-    private var isSent: Bool { message.labels.contains("SENT") && !message.labels.contains("INBOX") }
+    private var isSent: Bool { message.isSent && !message.isInInbox }
     private var avatarEmail: String {
         isSent ? MessageParser.splitAddress(message.to.first ?? "").1.lowercased() : message.fromEmail
     }

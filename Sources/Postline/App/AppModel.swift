@@ -323,8 +323,7 @@ final class AppModel {
         if thread.count == 1, first.references != nil, !isDemo {
             Task { await SyncEngine.shared.completeThread(first.threadID, email: first.account) }
         }
-        let unread = thread.filter(\.isUnread)
-        if !unread.isEmpty { setLabels(unread, add: [], remove: ["UNREAD"]) }
+        commit(changes(thread.filter(\.isUnread)) { $0.isUnread = false })
     }
 
     /// Brings the window forward, reopening it if it was closed.
@@ -392,7 +391,7 @@ final class AppModel {
     /// bar icon can be tested without sending real mail.
     private func simulateArrivalIfAsked() {
         let env = ProcessInfo.processInfo.environment
-        let inbox = store.messages(in: .inbox, account: nil, limit: 50)
+        let inbox = store.messages(in: .inbox, account: nil, limit: 50).compactMap { store.message($0.id) }
         func hasCode(_ m: Message) -> Bool { CodeFinder.find(subject: m.subject, text: m.bodyText, html: m.bodyHTML) != nil }
         for (key, wantsCode) in [("POSTLINE_SIMULATE_MAIL", false), ("POSTLINE_SIMULATE_CODE", true)] {
             guard let s = env[key].flatMap(Double.init) else { continue }
@@ -434,98 +433,95 @@ final class AppModel {
         selection = list[next].id
     }
 
-    // MARK: Actions (on screen first, Gmail in the background)
+    // MARK: Actions (on screen first, the provider in the background)
 
     var selectedThread: [Message] { thread }
 
     func archive() { archive(thread) }
     func archive(_ messages: [Message], title: String = "Archived") {
-        act(on: messages, title: title, add: [], remove: ["INBOX"])
+        act(on: messages, title: title) { $0.roles.subtract([.inbox]); $0.roles.insert(.archive) }
     }
-    func moveToInbox() { act(on: thread, title: "Moved to Inbox", add: ["INBOX"], remove: ["TRASH", "SPAM"]) }
-    func markSpam() { act(on: thread, title: "Marked as spam", add: ["SPAM"], remove: ["INBOX"]) }
+    func moveToInbox() {
+        act(on: thread, title: "Moved to Inbox") { $0.roles.subtract([.trash, .spam, .archive]); $0.roles.insert(.inbox) }
+    }
+    func markSpam() {
+        act(on: thread, title: "Marked as spam") { $0.roles.subtract([.inbox, .archive]); $0.roles.insert(.spam) }
+    }
 
     func trash() { trash(thread) }
-
     func trash(_ messages: [Message], title: String = "Moved to Trash") {
-        guard !messages.isEmpty else { return }
-        let wasOpen = isOpen(messages)
-        if wasOpen { advanceSelection() }
-        for m in messages { var l = m.labels; l.insert("TRASH"); l.remove("INBOX"); store.setLabels(m.id, l) }
-        reload()
-        let task = Task {
-            for m in messages where !isDemo { try? await GmailAPI(email: m.account).trash(m.id) }
-        }
-        toast = Toast(text: title) { [weak self] in
-            for m in messages { self?.store.setLabels(m.id, m.labels) }
-            if wasOpen { self?.selection = messages.last?.id }
-            // Untrash only after the trash request has landed, so Gmail
-            // never sees them in the wrong order.
-            Task {
-                await task.value
-                for m in messages where !(self?.isDemo ?? true) { try? await GmailAPI(email: m.account).untrash(m.id) }
-            }
-            self?.reload()
-        }
+        act(on: messages, title: title) { $0.roles.subtract([.inbox, .archive]); $0.roles.insert(.trash) }
     }
 
     func toggleUnread() {
         guard !thread.isEmpty else { return }
-        let anyUnread = thread.contains(where: \.isUnread)
-        if anyUnread { setLabels(thread, add: [], remove: ["UNREAD"]) }
-        else if let last = thread.last { setLabels([last], add: ["UNREAD"], remove: []) }
+        if thread.contains(where: \.isUnread) { commit(changes(thread) { $0.isUnread = false }) }
+        else if let last = thread.last { commit(changes([last]) { $0.isUnread = true }) }
     }
 
     func togglePin() {
         guard let last = thread.last else { return }
-        let pinned = thread.contains(where: \.isStarred)
-        if pinned { setLabels(thread.filter(\.isStarred), add: [], remove: ["STARRED"]) }
-        else { setLabels([last], add: ["STARRED"], remove: []) }
+        let pinned = thread.contains(where: \.isFlagged)
+        if pinned { commit(changes(thread) { $0.isFlagged = false }) }
+        else { commit(changes([last]) { $0.isFlagged = true }) }
         toast = Toast(text: pinned ? "Unpinned" : "Pinned")
     }
 
-    private func act(on messages: [Message], title: String, add: Set<String>, remove: Set<String>) {
+    /// Moves messages somewhere (archive, Trash, back to the Inbox) with a
+    /// toast whose Undo puts back exactly what each message had.
+    private func act(on messages: [Message], title: String, _ edit: (inout MailState) -> Void) {
         guard !messages.isEmpty else { return }
-        let before = messages
         // Only the open conversation moves the reader on; a swiped or batch
         // row elsewhere in the list leaves what you're reading alone.
         let wasOpen = isOpen(messages)
         if wasOpen { advanceSelection() }
-        let request = setLabels(messages, add: add, remove: remove)
+        let made = changes(messages, edit)
+        let request = commit(made)
         toast = Toast(text: title) { [weak self] in
             guard let self else { return }
-            // Put back exactly what each message had, here and in Gmail.
-            for m in before { self.store.setLabels(m.id, m.labels) }
-            if wasOpen { self.selection = before.last?.id }
+            // Wait for the original change to reach the provider first; sent
+            // in parallel, the undo could land before it and be overwritten.
+            self.commit(made.map(\.reversed), after: request)
+            if wasOpen { self.selection = messages.last?.id }
             self.reload()
-            guard !self.isDemo else { return }
-            Task {
-                // Wait for the original change to reach Gmail first; sent in
-                // parallel, the undo could land before it and be overwritten.
-                await request?.value
-                for m in before {
-                    try? await GmailAPI(email: m.account).modify(
-                        m.id, add: Array(remove.intersection(m.labels)), remove: Array(add.subtracting(m.labels)))
-                }
-            }
         }
     }
 
-    @discardableResult
-    private func setLabels(_ messages: [Message], add: Set<String>, remove: Set<String>) -> Task<Void, Never>? {
-        for m in messages {
-            var l = m.labels
-            l.formUnion(add)
-            l.subtract(remove)
-            store.setLabels(m.id, l)
+    /// One message's state before and after an action.
+    private struct StateChange: Sendable {
+        let id: String
+        let account: String
+        let before: MailState
+        let after: MailState
+        var reversed: StateChange { StateChange(id: id, account: account, before: after, after: before) }
+    }
+
+    /// What an edit does to each message, as the provider will report it.
+    /// Messages it leaves as they were are dropped.
+    private func changes(_ messages: [Message], _ edit: (inout MailState) -> Void) -> [StateChange] {
+        messages.compactMap { m in
+            var state = m.state
+            edit(&state)
+            // Every account is Gmail for now; the provider step routes this.
+            state = GmailMapping.normalised(state, to: m.to, account: m.account)
+            return state == m.state ? nil : StateChange(id: m.id, account: m.account, before: m.state, after: state)
         }
+    }
+
+    /// Shows the changes at once, then sends them to the provider, after an
+    /// earlier request has finished when one is given.
+    @discardableResult
+    private func commit(_ changes: [StateChange], after earlier: Task<Void, Never>? = nil) -> Task<Void, Never>? {
+        guard !changes.isEmpty else { return nil }
+        for c in changes { store.setState(c.id, c.after) }
         scheduleReload()
         guard !isDemo else { return nil }
+        let remote = store.remoteIDs(for: changes.map(\.id))
         return Task {
-            for m in messages {
-                let a = Array(add.subtracting(m.labels)), r = Array(remove.intersection(m.labels))
-                guard !a.isEmpty || !r.isEmpty else { continue }
-                do { try await GmailAPI(email: m.account).modify(m.id, add: a, remove: r) }
+            await earlier?.value
+            for c in changes {
+                guard let remoteID = remote[c.id] else { continue }
+                do { try await GmailMapping.push(from: c.before, to: c.after, remoteID: remoteID, account: c.account) }
                 catch { self.error = "Couldn't update Gmail: \(error.localizedDescription)" }
             }
         }
@@ -589,8 +585,7 @@ final class AppModel {
     }
 
     func batchMarkRead() {
-        let unread = messages(ofThreadKeys: batch).filter(\.isUnread)
-        if !unread.isEmpty { setLabels(unread, add: [], remove: ["UNREAD"]) }
+        commit(changes(messages(ofThreadKeys: batch).filter(\.isUnread)) { $0.isUnread = false })
         selecting = false
     }
 
@@ -690,7 +685,9 @@ final class AppModel {
             do {
                 let data: Data
                 if isDemo { data = Data("Demo attachment".utf8) }
-                else if let aid = a.attachmentID { data = try await GmailAPI(email: m.account).attachment(messageID: m.id, attachmentID: aid) }
+                else if let aid = a.attachmentID, let remoteID = store.remoteID(for: m.id) {
+                    data = try await GmailAPI(email: m.account).attachment(messageID: remoteID, attachmentID: aid)
+                }
                 else { return }
                 let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Postline/\(m.id)", isDirectory: true)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

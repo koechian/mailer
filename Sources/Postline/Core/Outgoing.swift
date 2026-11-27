@@ -32,7 +32,7 @@ struct Draft: Equatable, Identifiable {
         let from = account.sendAs.first { a in (m.to + m.cc).contains { $0.lowercased().contains(a.email) } }
             ?? account.sendAs.first ?? SendAs(email: account.email, name: account.name ?? "", isDefault: true)
         var to = [m.replyTo ?? m.fromEmail]
-        if m.labels.contains("SENT") { to = m.to }
+        if m.isSent { to = m.to }
         var cc: [String] = []
         if all {
             cc = (m.to + m.cc).filter { addr in !me.contains { addr.lowercased().contains($0) } && !to.contains(addr) }

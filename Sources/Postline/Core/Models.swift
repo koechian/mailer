@@ -49,7 +49,33 @@ struct Attachment: Codable, Equatable, Hashable, Sendable {
     var partID: String
 }
 
+/// Where a message sits, in words every provider can map onto: Gmail's
+/// system labels, IMAP's special-use folders, Microsoft's well-known folders.
+/// A message can hold several (Gmail mail you sent to yourself is in both
+/// Inbox and Sent).
+enum MailboxRole: String, CaseIterable, Codable, Sendable {
+    case inbox, sent, drafts, trash, spam, archive
+
+    /// The `messages` column that records the role.
+    var column: String { "in_\(rawValue)" }
+}
+
+/// A message's state apart from its content: its roles, the two flags every
+/// provider has, and tags. Tags hold everything else a provider says about
+/// the message (Gmail's categories and user labels, an IMAP folder's name)
+/// and, later, Postline's own sorting.
+struct MailState: Equatable, Hashable, Sendable {
+    var roles: Set<MailboxRole> = []
+    var isUnread = false
+    /// Gmail's star, IMAP's \Flagged; drawn as Pinned.
+    var isFlagged = false
+    var tags: Set<String> = []
+}
+
 struct Message: Identifiable, Equatable, Hashable, Sendable {
+    /// Postline's own ID for the message. It never changes, even when the
+    /// provider's ID does (an IMAP message moved to another folder gets a new
+    /// UID); the store maps it to the provider's IDs.
     var id: String
     var account: String
     var threadID: String
@@ -61,9 +87,11 @@ struct Message: Identifiable, Equatable, Hashable, Sendable {
     var replyTo: String?
     var subject: String
     var snippet: String
+    /// Bodies are loaded for a single message or a conversation, not for
+    /// lists: in a mailbox listing or search result these are empty.
     var bodyText: String
     var bodyHTML: String?
-    var labels: Set<String>
+    var state: MailState
     var attachments: [Attachment]
     var category: MailCategory
     /// The sender's domain passed DMARC: Gmail checked the mail really came
@@ -73,13 +101,21 @@ struct Message: Identifiable, Equatable, Hashable, Sendable {
     var references: String?
     var listUnsubscribe: String?
 
-    var isUnread: Bool { labels.contains("UNREAD") }
-    var isStarred: Bool { labels.contains("STARRED") }
-    var isInInbox: Bool { labels.contains("INBOX") }
+    var isUnread: Bool { state.isUnread }
+    var isFlagged: Bool { state.isFlagged }
+    var isInInbox: Bool { state.roles.contains(.inbox) }
+    var isSent: Bool { state.roles.contains(.sent) }
     var senderLabel: String { fromName.isEmpty ? fromEmail : fromName }
 }
 
-/// The places mail can be looked at. Labels are Gmail system labels.
+/// A message as a provider delivered it, before the store has given it a
+/// local ID: `message.id` is ignored and `remoteID` is the provider's own.
+struct FetchedMessage: Sendable {
+    var remoteID: String
+    var message: Message
+}
+
+/// The places mail can be looked at, as SQL over the neutral columns.
 enum Mailbox: String, CaseIterable, Identifiable, Sendable {
     case inbox, other, pinned, sent, drafts, archive, trash, spam
     var id: String { rawValue }
@@ -110,9 +146,13 @@ enum Mailbox: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Tags that keep a message out of the Inbox (Primary) until the
+    /// provider has said otherwise: Gmail's Promotions, Social and Forums.
+    static let otherTags = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"]
+
     private static let primary = """
-    (primary_tab = 1 OR (primary_tab IS NULL AND labels NOT LIKE '% CATEGORY_PROMOTIONS %' \
-    AND labels NOT LIKE '% CATEGORY_SOCIAL %' AND labels NOT LIKE '% CATEGORY_FORUMS %'))
+    (primary_tab = 1 OR (primary_tab IS NULL AND NOT EXISTS (SELECT 1 FROM message_tags t \
+    WHERE t.message_id = messages.id AND t.tag IN (\(otherTags.map { "'\($0)'" }.joined(separator: ","))))))
     """
 
     /// SQL that picks this mailbox's messages out of `messages`.
@@ -122,21 +162,19 @@ enum Mailbox: String, CaseIterable, Identifiable, Sendable {
         // decides (its own `category:primary` search — it keeps most
         // Updates in Primary, not by label alone); `primary_tab` holds its
         // answer. Until it has answered for a new message, Promotions,
-        // Social and Forums are left out by label (owner, 2026-11-13).
-        case .inbox: "labels LIKE '% INBOX %' AND \(Mailbox.primary)"
+        // Social and Forums are left out by tag (owner, 2026-11-13).
+        // Providers with no Primary tab leave `primary_tab` NULL and no
+        // such tags, so their whole Inbox is here.
+        case .inbox: "in_inbox = 1 AND \(Mailbox.primary)"
         // Everything else Gmail files in its Inbox: Promotions, Social,
         // the Updates it keeps out of Primary.
-        case .other: "labels LIKE '% INBOX %' AND NOT \(Mailbox.primary)"
-        case .pinned: "labels LIKE '% STARRED %' AND labels NOT LIKE '% TRASH %'"
-        case .sent: "labels LIKE '% SENT %' AND labels NOT LIKE '% TRASH %'"
-        case .drafts: "labels LIKE '% DRAFT %'"
-        // Archived = out of the Inbox. Sent mail is left out (it was never in
-        // the Inbox) — except mail you sent to your own address, which
-        // arrives in the Inbox too; without this, archiving one hid it from
-        // every list and it could not be unarchived (2026-11-12).
-        case .archive: "labels NOT LIKE '% INBOX %' AND labels NOT LIKE '% TRASH %' AND labels NOT LIKE '% SPAM %' AND labels NOT LIKE '% DRAFT %' AND (labels NOT LIKE '% SENT %' OR to_list LIKE '%' || account || '%')"
-        case .trash: "labels LIKE '% TRASH %'"
-        case .spam: "labels LIKE '% SPAM %'"
+        case .other: "in_inbox = 1 AND NOT \(Mailbox.primary)"
+        case .pinned: "is_flagged = 1 AND in_trash = 0"
+        case .sent: "in_sent = 1 AND in_trash = 0"
+        case .drafts: "in_drafts = 1"
+        case .archive: "in_archive = 1"
+        case .trash: "in_trash = 1"
+        case .spam: "in_spam = 1"
         }
     }
 }

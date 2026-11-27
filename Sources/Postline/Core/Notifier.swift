@@ -68,7 +68,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 continue
             }
             // Promotions and Social stay quiet, as they do in Gmail's Primary.
-            if m.labels.contains("CATEGORY_PROMOTIONS") || m.labels.contains("CATEGORY_SOCIAL") || m.labels.contains("CATEGORY_FORUMS") {
+            if !m.state.tags.isDisjoint(with: Mailbox.otherTags) {
                 continue
             }
             // Shown in the menu bar icon whatever the notification setting:

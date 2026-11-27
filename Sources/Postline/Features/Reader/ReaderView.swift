@@ -64,8 +64,8 @@ struct ActionBar: View {
             }
             IconButton(icon: .trash, help: "Move to Trash (#)", bordered: true) { model.trash() }
             IconButton(icon: .markUnread, help: model.thread.contains(where: \.isUnread) ? "Mark as read (U)" : "Mark as unread (U)", bordered: true) { model.toggleUnread() }
-            IconButton(icon: .pin, help: model.thread.contains(where: \.isStarred) ? "Unpin (S)" : "Pin (S)",
-                       tint: model.thread.contains(where: \.isStarred) ? Theme.Hue.amber.fill : Theme.muted, bordered: true) { model.togglePin() }
+            IconButton(icon: .pin, help: model.thread.contains(where: \.isFlagged) ? "Unpin (S)" : "Pin (S)",
+                       tint: model.thread.contains(where: \.isFlagged) ? Theme.Hue.amber.fill : Theme.muted, bordered: true) { model.togglePin() }
             Menu {
                 Button("Mark as spam") { model.markSpam() }
                 if let unsubscribe = unsubscribeURL {

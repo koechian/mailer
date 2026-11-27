@@ -149,33 +149,36 @@ actor SyncEngine {
             return
         }
 
+        // History speaks in Gmail IDs; the store maps them to local ones.
         // Label changes on mail we already have: apply locally, no download.
+        let edited = store.localIDs(account: email, remoteIDs: Array(labelEdits.keys))
         var refetch: [String] = []
-        for (id, labels) in labelEdits where !deleted.contains(id) {
-            if store.message(id) != nil {
-                store.setLabels(id, labels)
+        for (remoteID, labels) in labelEdits where !deleted.contains(remoteID) {
+            if let id = edited[remoteID], let m = store.message(id) {
+                store.setState(id, GmailMapping.state(labels: labels, to: m.to, account: email))
             } else if labels.contains("INBOX") || labels.contains("STARRED") {
                 // Old mail moved back into view (unarchived, starred on the
                 // phone): fetch it now.
-                refetch.append(id)
+                refetch.append(remoteID)
             }
         }
 
-        let toFetch = Array(Set(added + refetch).subtracting(deleted)).filter { !store.has($0) }
-        let fresh = try await fetch(toFetch, email: email)
-        store.upsert(fresh)
-        store.delete(ids: Array(deleted))
+        let candidates = Array(Set(added + refetch).subtracting(deleted))
+        let alreadyHere = store.localIDs(account: email, remoteIDs: candidates)
+        let fresh = try await fetch(candidates.filter { alreadyHere[$0] == nil }, email: email)
+        let saved = store.ingest(fresh)
+        store.delete(ids: Array(store.localIDs(account: email, remoteIDs: Array(deleted)).values))
 
         // Whole threads for replies to conversations we never downloaded.
-        var completed: [Message] = []
-        for m in fresh where m.references != nil {
-            let known = store.threadMessageIDs(m.threadID, account: email)
+        var completed: [FetchedMessage] = []
+        for m in saved where m.references != nil {
+            let known = store.threadRemoteIDs(m.threadID, account: email)
             if known.count <= 1, let thread = try? await api.thread(m.threadID) {
                 let missing = (thread.messages ?? []).filter { !known.contains($0.id) }
                 completed += missing.map { MessageParser.parse($0, account: email) }
             }
         }
-        store.upsert(completed)
+        store.ingest(completed)
 
         if latest != start {
             account.historyID = latest
@@ -187,13 +190,16 @@ actor SyncEngine {
         }
         // New Inbox mail: ask Gmail straight away whether it's Primary, so it
         // lands in the right tab within seconds rather than at the next check.
-        if fresh.contains(where: \.isInInbox),
+        if saved.contains(where: \.isInInbox),
            let recent = try? await api.list(query: "in:inbox category:primary newer_than:2d", pageToken: nil, max: 100) {
             store.markPrimary(account: email, primary: Set((recent.messages ?? []).map(\.id)),
                               since: Date().addingTimeInterval(-2 * 86400))
             await onStoreChanged?()
         }
-        let arrived = fresh.filter { added.contains($0.id) && $0.isInInbox && $0.date.timeIntervalSinceNow > -15 * 60 }
+        let addedIDs = Set(added)
+        let arrived = zip(fresh, saved)
+            .filter { addedIDs.contains($0.0.remoteID) && $0.1.isInInbox && $0.1.date.timeIntervalSinceNow > -15 * 60 }
+            .map(\.1)
         if !arrived.isEmpty { await onNewMail?(arrived) }
     }
 
@@ -212,13 +218,13 @@ actor SyncEngine {
             ids += (p.messages ?? []).map(\.id)
             page = p.nextPageToken
         } while page != nil
-        ids = ids.filter { !store.has($0) }
+        let alreadyHere = store.localIDs(account: email, remoteIDs: ids)
+        ids = ids.filter { alreadyHere[$0] == nil }
         let total = ids.count
         var done = 0
         await progress?(ImportProgress(done: 0, total: total))
         for chunk in stride(from: 0, to: ids.count, by: 50).map({ Array(ids[$0..<min($0 + 50, ids.count)]) }) {
-            let messages = try await fetch(chunk, email: email)
-            store.upsert(messages)
+            store.ingest(try await fetch(chunk, email: email))
             done += chunk.count
             await progress?(ImportProgress(done: done, total: total))
             await onStoreChanged?()
@@ -237,13 +243,13 @@ actor SyncEngine {
     /// the change list loaded, the downloads timed out, the failures were
     /// swallowed and the cursor moved on — that mail was skipped for good
     /// (2026-11-12, a 9:19 PM Google alert never appeared).
-    private func fetch(_ ids: [String], email: String) async throws -> [Message] {
+    private func fetch(_ ids: [String], email: String) async throws -> [FetchedMessage] {
         guard !ids.isEmpty else { return [] }
         let api = GmailAPI(email: email)
-        var out: [Message] = []
+        var out: [FetchedMessage] = []
         var failure: Error?
         for batch in stride(from: 0, to: ids.count, by: 4).map({ Array(ids[$0..<min($0 + 4, ids.count)]) }) {
-            let results = await withTaskGroup(of: Result<Message?, Error>.self) { group in
+            let results = await withTaskGroup(of: Result<FetchedMessage?, Error>.self) { group in
                 for id in batch {
                     group.addTask {
                         do { return .success(MessageParser.parse(try await api.message(id), account: email)) }
@@ -251,7 +257,7 @@ actor SyncEngine {
                         catch { return .failure(error) }
                     }
                 }
-                var collected: [Result<Message?, Error>] = []
+                var collected: [Result<FetchedMessage?, Error>] = []
                 for await r in group { collected.append(r) }
                 return collected
             }
@@ -263,7 +269,7 @@ actor SyncEngine {
             }
         }
         if let failure {
-            store.upsert(out)
+            store.ingest(out)
             throw failure
         }
         return out
@@ -289,27 +295,34 @@ actor SyncEngine {
             // and an Other email archived on the web never left.
             let local = store.messages(in: .inbox, account: email, limit: 400)
                 + store.messages(in: .other, account: email, limit: 400)
-            let localInbox = Set(local.map(\.id))
+            let remoteOf = store.remoteIDs(for: local.map(\.id))
+            let localInbox = Set(local.compactMap { remoteOf[$0.id] })
+            let known = store.localIDs(account: email, remoteIDs: Array(gmailInbox))
+            func listed(_ m: Message) -> Bool { remoteOf[m.id].map(gmailInbox.contains) ?? false }
 
             // In Gmail's Inbox but missing here, or here without the Inbox label.
-            let missing = gmailInbox.filter { !store.has($0) }
+            let missing = gmailInbox.filter { known[$0] == nil }
             let relabel = gmailInbox.subtracting(missing).subtracting(localInbox)
             // Here in the Inbox, not in Gmail's (archived or deleted elsewhere).
             // Only within the window Gmail listed, so older mail isn't judged.
-            let oldestListed = local.filter { gmailInbox.contains($0.id) }.map(\.date).min() ?? .distantPast
-            let gone = local.filter { !gmailInbox.contains($0.id) && $0.date >= oldestListed }.map(\.id)
+            let oldestListed = local.filter(listed).map(\.date).min() ?? .distantPast
+            let gone = local.filter { !listed($0) && $0.date >= oldestListed }
 
             var changed = 0
             if !missing.isEmpty {
                 // Gently: at most 40 a run; the rest come two minutes later.
                 let fresh = try await fetch(Array(missing.prefix(40)), email: email)
-                store.upsert(fresh)
+                store.ingest(fresh)
                 changed += fresh.count
             }
-            for id in (Array(relabel) + gone).prefix(40) {
+            // (Gmail ID, local ID) of each message whose labels need checking.
+            let recheck = relabel.compactMap { remote in known[remote].map { (remote, $0) } }
+                + gone.compactMap { m in remoteOf[m.id].map { ($0, m.id) } }
+            for (remoteID, id) in recheck.prefix(40) {
                 do {
-                    let labels = Set(try await api.labels(id))
-                    store.setLabels(id, labels)
+                    let labels = Set(try await api.labels(remoteID))
+                    let to = store.message(id)?.to ?? []
+                    store.setState(id, GmailMapping.state(labels: labels, to: to, account: email))
                     changed += 1
                 } catch GmailError.notFound {
                     store.delete(ids: [id])
@@ -351,8 +364,11 @@ actor SyncEngine {
         let api = GmailAPI(email: email)
         var moved = 0
         do {
-            for m in store.messages(in: .inbox, account: email, limit: 400) {
-                let raw = try await api.arrival(m.id)
+            let inbox = store.messages(in: .inbox, account: email, limit: 400)
+            let remoteOf = store.remoteIDs(for: inbox.map(\.id))
+            for m in inbox {
+                guard let remoteID = remoteOf[m.id] else { continue }
+                let raw = try await api.arrival(remoteID)
                 let headers = Dictionary((raw.payload?.headers ?? []).map { ($0.name.lowercased(), $0.value) },
                                          uniquingKeysWith: { first, _ in first })
                 let date = MessageParser.arrivalDate(internalDate: raw.internalDate, headers: headers)
@@ -372,10 +388,10 @@ actor SyncEngine {
     /// Fetches a whole conversation on demand (opening an older thread).
     func completeThread(_ threadID: String, email: String) async {
         guard let thread = try? await GmailAPI(email: email).thread(threadID) else { return }
-        let known = store.threadMessageIDs(threadID, account: email)
+        let known = store.threadRemoteIDs(threadID, account: email)
         let missing = (thread.messages ?? []).filter { !known.contains($0.id) }.map { MessageParser.parse($0, account: email) }
         guard !missing.isEmpty else { return }
-        store.upsert(missing)
+        store.ingest(missing)
         await onStoreChanged?()
     }
 }
